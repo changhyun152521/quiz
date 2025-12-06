@@ -13,6 +13,13 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
   
+  // 핀치 줌 관련 상태
+  const [isPinching, setIsPinching] = useState(false);
+  const [pinchStartDistance, setPinchStartDistance] = useState(0);
+  const [pinchStartZoom, setPinchStartZoom] = useState(1);
+  const [pinchCenter, setPinchCenter] = useState({ x: 0, y: 0 });
+  const lastTouchesRef = useRef([]);
+  
   const canvasRef = useRef(null);
   const drawingCanvasRef = useRef(null);
   const imageRef = useRef(null);
@@ -26,6 +33,11 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
   const [hasChanges, setHasChanges] = useState(false); // 펜/지우개 사용 여부 추적
   const [submissionResult, setSubmissionResult] = useState(null); // 제출 결과 저장
   const [isSubmitted, setIsSubmitted] = useState(false); // 제출 상태
+
+  // 페이지 마운트 시 상단으로 스크롤
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'smooth' })
+  }, [])
 
   // 펜 색상 옵션 (5가지)
   const penColors = [
@@ -472,34 +484,143 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
     }
   };
 
+  // 두 터치 포인트 사이의 거리 계산
+  const getTouchDistance = (touch1, touch2) => {
+    const dx = touch2.clientX - touch1.clientX;
+    const dy = touch2.clientY - touch1.clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  };
+
+  // 두 터치 포인트의 중심점 계산
+  const getTouchCenter = (touch1, touch2) => {
+    return {
+      x: (touch1.clientX + touch2.clientX) / 2,
+      y: (touch1.clientY + touch2.clientY) / 2
+    };
+  };
+
   // 터치 이벤트 처리
   const handleTouchStart = (e) => {
     e.preventDefault();
-    const touch = e.touches[0];
-    // 이미지 영역 내에서만 작동
-    if (!isPointInImageBounds(touch.clientX, touch.clientY)) {
+    
+    const touches = Array.from(e.touches);
+    lastTouchesRef.current = touches;
+
+    // 두 개의 터치 포인트가 있으면 핀치 줌 시작
+    if (touches.length === 2) {
+      const distance = getTouchDistance(touches[0], touches[1]);
+      const center = getTouchCenter(touches[0], touches[1]);
+      
+      setIsPinching(true);
+      setPinchStartDistance(distance);
+      setPinchStartZoom(zoom);
+      setPinchCenter(center);
+      
+      // 그리기 및 팬 중지
+      setIsDrawing(false);
+      setIsPanning(false);
       return;
     }
-    const mouseEvent = new MouseEvent('mousedown', {
-      clientX: touch.clientX,
-      clientY: touch.clientY
-    });
-    handleMouseDown(mouseEvent);
+
+    // 한 개의 터치 포인트만 있으면 일반 터치 처리
+    if (touches.length === 1) {
+      const touch = touches[0];
+      // 이미지 영역 내에서만 작동
+      if (!isPointInImageBounds(touch.clientX, touch.clientY)) {
+        return;
+      }
+      
+      // 핀치 중이 아니면 일반 터치 처리
+      if (!isPinching) {
+        const mouseEvent = new MouseEvent('mousedown', {
+          clientX: touch.clientX,
+          clientY: touch.clientY
+        });
+        handleMouseDown(mouseEvent);
+      }
+    }
   };
 
   const handleTouchMove = (e) => {
     e.preventDefault();
-    const touch = e.touches[0];
-    const mouseEvent = new MouseEvent('mousemove', {
-      clientX: touch.clientX,
-      clientY: touch.clientY
-    });
-    handleMouseMove(mouseEvent);
+    
+    const touches = Array.from(e.touches);
+    lastTouchesRef.current = touches;
+
+    // 두 개의 터치 포인트가 있으면 핀치 줌 처리
+    if (touches.length === 2 && isPinching) {
+      const distance = getTouchDistance(touches[0], touches[1]);
+      const center = getTouchCenter(touches[0], touches[1]);
+      
+      // 줌 비율 계산
+      const scale = distance / pinchStartDistance;
+      const newZoom = Math.max(0.5, Math.min(3, pinchStartZoom * scale));
+      
+      // 핀치 중심점 기준으로 팬 오프셋 조정
+      const viewerContainer = document.querySelector('.image-viewer');
+      const contentDiv = document.querySelector('.image-viewer-content');
+      if (viewerContainer && contentDiv) {
+        const viewerRect = viewerContainer.getBoundingClientRect();
+        const contentRect = contentDiv.getBoundingClientRect();
+        
+        // 현재 핀치 중심점을 뷰어 좌표계로 변환
+        const pinchX = center.x - viewerRect.left;
+        const pinchY = center.y - viewerRect.top;
+        
+        // 시작 핀치 중심점을 뷰어 좌표계로 변환
+        const startPinchX = pinchCenter.x - viewerRect.left;
+        const startPinchY = pinchCenter.y - viewerRect.top;
+        
+        // 줌 변화에 따른 오프셋 조정
+        // 핀치 중심점이 고정되도록 오프셋 계산
+        const zoomDelta = newZoom - pinchStartZoom;
+        const offsetX = startPinchX - (startPinchX - panOffset.x) * (newZoom / pinchStartZoom);
+        const offsetY = startPinchY - (startPinchY - panOffset.y) * (newZoom / pinchStartZoom);
+        
+        // 핀치 중심점 이동에 따른 추가 오프셋
+        const centerDeltaX = pinchX - startPinchX;
+        const centerDeltaY = pinchY - startPinchY;
+        
+        setPanOffset({
+          x: offsetX + centerDeltaX,
+          y: offsetY + centerDeltaY
+        });
+        setPinchCenter(center);
+      }
+      
+      setZoom(newZoom);
+      return;
+    }
+
+    // 한 개의 터치 포인트만 있고 핀치 중이 아니면 일반 터치 처리
+    if (touches.length === 1 && !isPinching) {
+      const touch = touches[0];
+      const mouseEvent = new MouseEvent('mousemove', {
+        clientX: touch.clientX,
+        clientY: touch.clientY
+      });
+      handleMouseMove(mouseEvent);
+    }
   };
 
   const handleTouchEnd = (e) => {
     e.preventDefault();
-    handleMouseUp();
+    
+    const touches = Array.from(e.touches);
+    lastTouchesRef.current = touches;
+
+    // 핀치 줌 종료
+    if (isPinching && touches.length < 2) {
+      setIsPinching(false);
+      setPinchStartDistance(0);
+      setPinchStartZoom(1);
+      setPinchCenter({ x: 0, y: 0 });
+    }
+
+    // 모든 터치가 끝나면 일반 터치 종료
+    if (touches.length === 0) {
+      handleMouseUp();
+    }
   };
 
   // 전체 지우기
@@ -732,6 +853,12 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
                 onTouchStart={handleTouchStart}
                 onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}
+                onTouchCancel={handleTouchEnd}
+                style={{ 
+                  touchAction: 'none',
+                  userSelect: 'none',
+                  WebkitUserSelect: 'none'
+                }}
               />
             </div>
           </div>

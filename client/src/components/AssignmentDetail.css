@@ -114,6 +114,8 @@
   padding: 0;
   margin-bottom: 120px; /* tool-panel + image-navigation 높이만큼 여백 추가 */
   box-sizing: border-box;
+  touch-action: none; /* 핀치 줌을 위해 기본 터치 동작 비활성화 */
+  -webkit-overflow-scrolling: touch; /* iOS 부드러운 스크롤 */
 }
 
 .image-viewer-content {
@@ -125,6 +127,8 @@
   max-height: 100%;
   background: #ffffff; /* 이미지 영역 배경색 */
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1); /* 이미지 영역 구분을 위한 그림자 */
+  touch-action: none; /* 핀치 줌을 위해 기본 터치 동작 비활성화 */
+  will-change: transform; /* 성능 최적화 */
 }
 
 .assignment-image {
