@@ -13,6 +13,11 @@ import '../components/AdminDashboard.css';
 function AdminDashboardPage({ user, onLogout, onGoToMainPage }) {
   const [activeSection, setActiveSection] = useState('students');
   
+  // 페이지 마운트 시 상단으로 스크롤
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'smooth' })
+  }, [])
+
   // 학생 관리 상태
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(false);

@@ -16,6 +16,18 @@ function DashboardPage({ user, onLogout, onGoToMainPage }) {
   const [assignments, setAssignments] = useState([]);
   const [loading, setLoading] = useState(false);
   
+  // 페이지 마운트 시 상단으로 스크롤
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'smooth' })
+  }, [])
+
+  // 과제 상세 페이지로 이동 시 상단으로 스크롤
+  useEffect(() => {
+    if (selectedAssignment) {
+      window.scrollTo({ top: 0, left: 0, behavior: 'smooth' })
+    }
+  }, [selectedAssignment])
+
   // 현재 월을 기본값으로 설정
   useEffect(() => {
     const now = new Date();
