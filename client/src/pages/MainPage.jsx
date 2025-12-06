@@ -4,12 +4,17 @@ import SignUp from '../components/SignUp'
 import Login from '../components/Login'
 import '../App.css'
 
-function MainPage({ onLoginSuccess, onBackToDashboard }) {
+function MainPage({ onLoginSuccess, onBackToDashboard, onShowCourseSelection }) {
   const [showSignUpModal, setShowSignUpModal] = useState(false)
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [showContent, setShowContent] = useState(false)
   const [hasToken, setHasToken] = useState(false)
+
+  // 페이지 마운트 시 상단으로 스크롤
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'smooth' })
+  }, [])
 
   // 초기 로딩 애니메이션
   useEffect(() => {
@@ -23,54 +28,8 @@ function MainPage({ onLoginSuccess, onBackToDashboard }) {
     return () => clearTimeout(timer)
   }, [])
 
-  // 토큰 확인하여 자동 로그인
-  useEffect(() => {
-    const checkTokenAndAutoLogin = async () => {
-      const token = localStorage.getItem('token')
-      const userData = localStorage.getItem('user')
-
-      if (token && userData) {
-        try {
-          // 토큰 유효성 검증
-          const response = await get('/api/auth/verify')
-          
-          const data = await response.json()
-          if (data.success) {
-            // 유효한 토큰이 있으면 바로 대시보드로 이동
-            // 서버에서 반환한 최신 사용자 정보 사용 (또는 localStorage의 정보 사용)
-            const user = data.data?.user || JSON.parse(userData)
-            onLoginSuccess(user)
-            return
-          } else {
-            // 토큰이 유효하지 않으면 삭제
-            localStorage.removeItem('token')
-            localStorage.removeItem('user')
-            localStorage.removeItem('rememberMe')
-            setHasToken(false)
-          }
-        } catch (error) {
-          // 네트워크 오류 시 토큰이 있으면 일단 사용 (오프라인 상태일 수 있음)
-          console.error('토큰 검증 오류:', error)
-          // 네트워크 오류가 아닌 경우에만 토큰 삭제
-          if (error.message && !error.message.includes('fetch')) {
-            localStorage.removeItem('token')
-            localStorage.removeItem('user')
-            localStorage.removeItem('rememberMe')
-          }
-          setHasToken(false)
-        }
-      } else {
-        setHasToken(false)
-      }
-    }
-
-    // 약간의 지연을 두어 App.jsx의 토큰 검증이 완료될 시간을 줌
-    const timer = setTimeout(() => {
-      checkTokenAndAutoLogin()
-    }, 100)
-
-    return () => clearTimeout(timer)
-  }, [onLoginSuccess])
+  // MainPage에서는 자동 로그인을 하지 않음 (App.jsx에서 처리)
+  // 자동 로그인은 App.jsx의 useEffect에서만 처리
 
   return (
     <div className="App">
@@ -169,12 +128,6 @@ function MainPage({ onLoginSuccess, onBackToDashboard }) {
             <button 
               className="start-button"
               onClick={async () => {
-                // 로그인 상태일 때 (onBackToDashboard가 있으면) 바로 대시보드로 이동
-                if (onBackToDashboard) {
-                  onBackToDashboard()
-                  return
-                }
-
                 // 토큰 확인
                 const token = localStorage.getItem('token')
                 const userData = localStorage.getItem('user')
@@ -186,10 +139,16 @@ function MainPage({ onLoginSuccess, onBackToDashboard }) {
                     
                     const data = await response.json()
                     if (data.success) {
-                      // 유효한 토큰이 있으면 바로 Dashboard로 이동
-                      // 서버에서 반환한 최신 사용자 정보 사용
+                      // 유효한 토큰이 있으면 강좌 선택 모달 표시
                       const user = data.data?.user || JSON.parse(userData)
-                      onLoginSuccess(user)
+                      if (onShowCourseSelection && (user.role === 'student' || !user.role)) {
+                        // 먼저 로그인 상태 업데이트
+                        onLoginSuccess(user, false)
+                        // 그 다음 강좌 선택 모달 표시
+                        onShowCourseSelection()
+                      } else {
+                        onLoginSuccess(user, false)
+                      }
                       return
                     } else {
                       // 토큰이 유효하지 않으면 삭제하고 로그인 모달 열기

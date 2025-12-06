@@ -231,7 +231,12 @@ function MyInfoModal({ showModal, onClose, user, onUpdateUser, onUpdatePassword,
   const isStudent = user.role === 'student';
 
   return (
-    <div className="myinfo-modal-overlay" onClick={onClose}>
+    <div className="myinfo-modal-overlay" onClick={(e) => {
+      // 작업 중이 아닐 때만 overlay 클릭으로 닫기
+      if (!isSubmitting && !isChangingPassword && !isDeleting && e.target === e.currentTarget) {
+        onClose();
+      }
+    }}>
       <div className="myinfo-modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="myinfo-modal-header">
           <h2 className="myinfo-modal-title">내 정보</h2>

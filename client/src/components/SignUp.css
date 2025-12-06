@@ -68,16 +68,31 @@
   margin: 0 0 24px 0;
 }
 
-.signup-form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+/* 회원가입 폼 - 최고 우선순위 */
+.signup-modal-overlay .signup-modal-content .signup-wrapper .signup-form {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 12px !important;
+  row-gap: 12px !important;
+  column-gap: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+.signup-modal-overlay .signup-modal-content .signup-wrapper .signup-form > .form-group {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 6px !important;
+  margin: 0 !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  padding: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
 }
 
 

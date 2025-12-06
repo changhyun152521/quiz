@@ -22,77 +22,26 @@ const PORT = process.env.PORT || 5000;
 const corsOptions = {
   origin: process.env.FRONTEND_URL || true, // 프로덕션에서는 FRONTEND_URL 사용, 없으면 모든 origin 허용
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Access-Control-Request-Headers', 'Access-Control-Request-Method'],
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 };
 app.use(cors(corsOptions));
 
-// OPTIONS 요청 처리 (CORS preflight)
-app.options('*', cors());
+// OPTIONS 요청 처리 (CORS preflight) - 모든 경로에 대해
+app.options('*', cors(corsOptions));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// 포트 사용 가능 여부 확인 함수
-const checkPort = (port) => {
-  return new Promise((resolve) => {
-    const server = require('net').createServer();
-    server.listen(port, () => {
-      server.once('close', () => resolve(true));
-      server.close();
-    });
-    server.on('error', () => resolve(false));
-  });
-};
-
 // MongoDB 연결 및 서버 시작
 const startServer = async () => {
   try {
-    // 포트 사용 가능 여부 확인
-    const portAvailable = await checkPort(PORT);
-    if (!portAvailable) {
-      console.error(`\n❌ Port ${PORT} is already in use.`);
-      console.error('포트를 사용하는 프로세스를 종료하는 중...');
-      
-      // Windows에서 포트를 사용하는 프로세스 찾기 및 종료 시도
-      const { exec } = require('child_process');
-      exec(`netstat -ano | findstr :${PORT}`, (error, stdout) => {
-        if (stdout) {
-          const lines = stdout.trim().split('\n');
-          const pids = new Set();
-          lines.forEach(line => {
-            const match = line.match(/\s+(\d+)$/);
-            if (match) {
-              pids.add(match[1]);
-            }
-          });
-          
-          pids.forEach(pid => {
-            exec(`taskkill /PID ${pid} /F`, (err) => {
-              if (!err) {
-                console.log(`✓ 프로세스 ${pid} 종료됨`);
-              }
-            });
-          });
-          
-          // 프로세스 종료 후 잠시 대기 후 재시도
-          setTimeout(() => {
-            console.log('\n서버를 다시 시작합니다...\n');
-            startServer();
-          }, 2000);
-        } else {
-          console.error('포트를 사용하는 프로세스를 찾을 수 없습니다.');
-          console.error('수동으로 종료하세요: netstat -ano | findstr :' + PORT);
-          process.exit(1);
-        }
-      });
-      return;
-    }
-    
     // MongoDB 연결
     await connectDB();
     
-    // 서버 시작
+    // 서버 시작 (포트 에러는 서버 시작 시 처리)
     const server = app.listen(PORT, () => {
       console.log(`✓ Server is running on port ${PORT}`);
     });
@@ -101,8 +50,54 @@ const startServer = async () => {
     server.on('error', (error) => {
       if (error.code === 'EADDRINUSE') {
         console.error(`\n❌ Port ${PORT} is already in use.`);
-        console.error('서버를 재시작합니다...');
-        setTimeout(() => startServer(), 2000);
+        console.error('포트를 사용하는 프로세스를 종료하는 중...');
+        
+        // Windows에서 포트를 사용하는 프로세스 찾기 및 종료
+        const { exec } = require('child_process');
+        exec(`netstat -ano | findstr :${PORT} | findstr LISTENING`, (err, stdout) => {
+          if (stdout && stdout.trim().length > 0) {
+            const lines = stdout.trim().split('\n').filter(line => line.trim());
+            const pids = new Set();
+            
+            lines.forEach(line => {
+              if (line.includes('LISTENING')) {
+                const parts = line.trim().split(/\s+/);
+                const pid = parts[parts.length - 1];
+                if (pid && /^\d+$/.test(pid)) {
+                  pids.add(pid);
+                }
+              }
+            });
+            
+            if (pids.size > 0) {
+              const killPromises = Array.from(pids).map(pid => {
+                return new Promise((resolve) => {
+                  exec(`taskkill /PID ${pid} /F`, (killErr) => {
+                    if (!killErr) {
+                      console.log(`✓ 프로세스 ${pid} 종료됨`);
+                    }
+                    resolve();
+                  });
+                });
+              });
+              
+              Promise.all(killPromises).then(() => {
+                console.log('프로세스 종료 완료. 서버를 다시 시작합니다...\n');
+                setTimeout(() => {
+                  startServer();
+                }, 2000);
+              });
+            } else {
+              console.error('LISTENING 상태인 프로세스를 찾을 수 없습니다.');
+              console.error('수동으로 종료하세요: netstat -ano | findstr :' + PORT);
+              process.exit(1);
+            }
+          } else {
+            console.error('포트를 사용하는 프로세스를 찾을 수 없습니다.');
+            console.error('수동으로 종료하세요: netstat -ano | findstr :' + PORT);
+            process.exit(1);
+          }
+        });
       } else {
         console.error('Server error:', error);
         process.exit(1);

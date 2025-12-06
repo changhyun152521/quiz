@@ -388,6 +388,96 @@
   }
 }
 
+/* 정답 입력 섹션 스타일 */
+.answers-section {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.answers-section-label {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 16px;
+  font-family: 'Pretendard', sans-serif;
+}
+
+.required-mark {
+  color: #dc2626;
+  margin-left: 4px;
+}
+
+.answers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.answer-item {
+  padding: 16px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.question-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.question-number {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1a1a;
+  font-family: 'Pretendard', sans-serif;
+}
+
+.answer-inputs {
+  display: grid;
+  grid-template-columns: 1fr 120px;
+  gap: 12px;
+}
+
+.answer-input-group,
+.points-input-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.answer-input-group label,
+.points-input-group label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #666;
+  margin-bottom: 6px;
+  font-family: 'Pretendard', sans-serif;
+}
+
+.answer-input-group input,
+.points-input-group input {
+  padding: 10px 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: 'Pretendard', sans-serif;
+  transition: all 0.2s ease;
+}
+
+.answer-input-group input:focus,
+.points-input-group input:focus {
+  outline: none;
+  border-color: #1a1a1a;
+  box-shadow: 0 0 0 3px rgba(26, 26, 26, 0.1);
+}
+
+.answer-input-group input.error,
+.points-input-group input.error {
+  border-color: #dc2626;
+}
+
 @media (max-width: 768px) {
   .assignment-modal-content {
     width: 95%;
@@ -405,6 +495,10 @@
   .form-row {
     grid-template-columns: 1fr;
     gap: 16px;
+  }
+
+  .answer-inputs {
+    grid-template-columns: 1fr;
   }
 
   .assignment-modal-actions {

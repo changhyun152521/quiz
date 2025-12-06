@@ -201,7 +201,12 @@ function SignUp({ showModal, onClose, onShowLogin }) {
   }
 
   return (
-    <div className="signup-modal-overlay" onClick={onClose}>
+    <div className="signup-modal-overlay" onClick={(e) => {
+      // 작업 중이 아닐 때만 overlay 클릭으로 닫기
+      if (!isSubmitting && e.target === e.currentTarget) {
+        onClose();
+      }
+    }}>
       <div className="signup-modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="signup-wrapper">
         <button 
@@ -214,9 +219,27 @@ function SignUp({ showModal, onClose, onShowLogin }) {
         <h1 className="signup-title">회원가입</h1>
         <p className="signup-subtitle">새로운 계정을 만들어 학습을 시작하세요</p>
 
-        <form onSubmit={handleSubmit} className="signup-form">
+        <form onSubmit={handleSubmit} className="signup-form" style={{ 
+          display: 'flex', 
+          flexDirection: 'column', 
+          gap: '12px',
+          rowGap: '12px',
+          columnGap: '0',
+          margin: '0',
+          padding: '0'
+        }}>
           {/* 아이디 */}
-          <div className="form-group">
+          <div className="form-group" style={{ 
+            margin: '0', 
+            marginTop: '0', 
+            marginBottom: '0',
+            marginLeft: '0',
+            marginRight: '0',
+            padding: '0',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '6px'
+          }}>
             <div className="input-wrapper">
               <span className="input-icon">👤</span>
               <input

@@ -11,7 +11,8 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
     startDate: '',
     dueDate: '',
     fileUrl: [], // 여러 파일 지원을 위해 배열로 변경
-    fileType: [] // 여러 파일 지원을 위해 배열로 변경
+    fileType: [], // 여러 파일 지원을 위해 배열로 변경
+    answers: [] // 정답 배열 추가
   });
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -224,6 +225,39 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
     };
   }, []);
 
+  // questionCount가 변경될 때 answers 배열 동적 생성
+  useEffect(() => {
+    if (formData.questionCount && parseInt(formData.questionCount) > 0) {
+      const questionCount = parseInt(formData.questionCount);
+      const currentAnswers = formData.answers || [];
+      
+      // 기존 정답이 있으면 유지, 없으면 새로 생성
+      const newAnswers = [];
+      for (let i = 1; i <= questionCount; i++) {
+        const existing = currentAnswers.find(ans => ans.questionNumber === i);
+        newAnswers.push({
+          questionNumber: i,
+          answer: existing?.answer || '',
+          score: existing?.score || 1
+        });
+      }
+      
+      // questionCount가 줄어든 경우에만 answers 업데이트
+      if (newAnswers.length !== currentAnswers.length || mode === 'create') {
+        setFormData(prev => ({
+          ...prev,
+          answers: newAnswers
+        }));
+      }
+    } else {
+      // questionCount가 0이거나 비어있으면 answers 초기화
+      setFormData(prev => ({
+        ...prev,
+        answers: []
+      }));
+    }
+  }, [formData.questionCount, mode]);
+
   useEffect(() => {
     if (showModal) {
       if (mode === 'edit' && assignment) {
@@ -245,6 +279,19 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
           ? assignment.fileType 
           : (assignment.fileType ? [assignment.fileType] : []);
 
+        // 정답 배열 초기화
+        const questionCount = assignment.questionCount || 0;
+        const existingAnswers = assignment.answers || [];
+        const initialAnswers = [];
+        for (let i = 1; i <= questionCount; i++) {
+          const existing = existingAnswers.find(ans => ans.questionNumber === i);
+          initialAnswers.push({
+            questionNumber: i,
+            answer: existing?.answer || '',
+            score: existing?.score || 1
+          });
+        }
+
         setFormData({
           assignmentName: assignment.assignmentName || '',
           subject: assignment.subject || '',
@@ -253,7 +300,8 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
           startDate: formatDate(assignment.startDate),
           dueDate: formatDate(assignment.dueDate),
           fileUrl: fileUrls,
-          fileType: fileTypes
+          fileType: fileTypes,
+          answers: initialAnswers
         });
         
         // 미리보기 파일 목록 설정 (업로드 순서 유지)
@@ -275,7 +323,8 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
           startDate: '',
           dueDate: '',
           fileUrl: [],
-          fileType: []
+          fileType: [],
+          answers: []
         });
         setPreviewFiles([]);
       }
@@ -295,6 +344,32 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
         ...prev,
         [name]: ''
       }));
+    }
+  };
+
+  // 정답 입력 핸들러
+  const handleAnswerChange = (index, field, value) => {
+    setFormData(prev => {
+      const newAnswers = [...(prev.answers || [])];
+      if (newAnswers[index]) {
+        newAnswers[index] = {
+          ...newAnswers[index],
+          [field]: field === 'score' ? (parseFloat(value) || 0) : value
+        };
+      }
+      return {
+        ...prev,
+        answers: newAnswers
+      };
+    });
+
+    // 에러 제거
+    if (errors[`answer_${index + 1}`]) {
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[`answer_${index + 1}`];
+        return newErrors;
+      });
     }
   };
 
@@ -337,6 +412,25 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
       }
     }
 
+    // 생성 모드일 때 정답 필수 검증
+    if (mode === 'create') {
+      const answers = formData.answers || [];
+      if (answers.length === 0) {
+        newErrors.answers = '문항 수를 입력하면 정답을 입력할 수 있습니다';
+      } else {
+        answers.forEach((ans, index) => {
+          if (!ans.answer || ans.answer.trim() === '') {
+            newErrors[`answer_${index + 1}`] = `${index + 1}번 문항의 정답을 입력해주세요`;
+          } else if (ans.answer.length > 50) {
+            newErrors[`answer_${index + 1}`] = '정답은 최대 50자까지 가능합니다';
+          }
+          if (ans.score < 0) {
+            newErrors[`score_${index + 1}`] = '배점은 0 이상이어야 합니다';
+          }
+        });
+      }
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -352,11 +446,13 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
 
     try {
       await onSave(formData, mode === 'edit' ? assignment._id : null);
+      // 성공적으로 완료된 경우에만 모달 닫기
+      setIsSubmitting(false);
       onClose();
     } catch (error) {
       console.error('저장 오류:', error);
-    } finally {
       setIsSubmitting(false);
+      // 에러 발생 시 모달은 열어둠
     }
   };
 
@@ -365,7 +461,12 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
   }
 
   return (
-    <div className="assignment-modal-overlay" onClick={onClose}>
+    <div className="assignment-modal-overlay" onClick={(e) => {
+      // 작업 중이 아닐 때만 overlay 클릭으로 닫기
+      if (!isSubmitting && e.target === e.currentTarget) {
+        onClose();
+      }
+    }}>
       <div className="assignment-modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="assignment-modal-header">
           <h2 className="assignment-modal-title">
@@ -684,6 +785,56 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
               </div>
             )}
           </div>
+
+          {/* 정답 입력 섹션 */}
+          {formData.questionCount && parseInt(formData.questionCount) > 0 && (
+            <div className="form-group answers-section">
+              <label className="answers-section-label">정답 입력 {mode === 'create' && <span className="required-mark">*</span>}</label>
+              {errors.answers && (
+                <span className="error-message" style={{ display: 'block', marginBottom: '12px' }}>{errors.answers}</span>
+              )}
+              <div className="answers-list">
+                {(formData.answers || []).map((ans, index) => (
+                  <div key={index} className="answer-item">
+                    <div className="question-header">
+                      <span className="question-number">{index + 1}번</span>
+                      {errors[`answer_${index + 1}`] && (
+                        <span className="error-message">{errors[`answer_${index + 1}`]}</span>
+                      )}
+                    </div>
+                    <div className="answer-inputs">
+                      <div className="answer-input-group">
+                        <label>정답 {mode === 'create' && <span className="required-mark">*</span>}</label>
+                        <input
+                          type="text"
+                          value={ans.answer || ''}
+                          onChange={(e) => handleAnswerChange(index, 'answer', e.target.value)}
+                          placeholder={`${index + 1}번 문항 정답`}
+                          className={errors[`answer_${index + 1}`] ? 'error' : ''}
+                          maxLength={50}
+                        />
+                      </div>
+                      <div className="points-input-group">
+                        <label>배점</label>
+                        <input
+                          type="number"
+                          value={ans.score || 1}
+                          onChange={(e) => handleAnswerChange(index, 'score', e.target.value)}
+                          placeholder="배점"
+                          min="0"
+                          step="0.5"
+                          className={errors[`score_${index + 1}`] ? 'error' : ''}
+                        />
+                      </div>
+                    </div>
+                    {errors[`score_${index + 1}`] && (
+                      <span className="error-message">{errors[`score_${index + 1}`]}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="assignment-modal-actions">
             <button type="button" className="btn-cancel" onClick={onClose}>

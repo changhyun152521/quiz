@@ -141,8 +141,12 @@ function Login({ showModal, onClose, onShowSignUp, onLoginSuccess }) {
       
       onClose();
       // 로그인 성공 콜백 호출
+      // 학습하기 버튼을 통해 로그인한 경우 강좌 선택 모달 표시
       if (onLoginSuccess) {
-        onLoginSuccess(data.data.user);
+        const user = data.data.user;
+        // 학생인 경우 강좌 선택 모달 표시
+        const shouldShowCourseModal = (user.role === 'student' || !user.role);
+        onLoginSuccess(user, shouldShowCourseModal);
       }
     } catch (error) {
       console.error('로그인 오류:', error);
@@ -182,7 +186,12 @@ function Login({ showModal, onClose, onShowSignUp, onLoginSuccess }) {
   }
 
   return (
-    <div className="login-modal-overlay" onClick={onClose}>
+    <div className="login-modal-overlay" onClick={(e) => {
+      // 작업 중이 아닐 때만 overlay 클릭으로 닫기
+      if (!isSubmitting && e.target === e.currentTarget) {
+        onClose();
+      }
+    }}>
       <div className="login-modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="login-wrapper">
           <button 
@@ -197,13 +206,31 @@ function Login({ showModal, onClose, onShowSignUp, onLoginSuccess }) {
             <>
               <h1 className="login-title">로그인</h1>
               
-              <div className="login-notice">
+              <div className="login-notice" style={{ marginBottom: '24px', marginTop: '0', marginLeft: '0', marginRight: '0' }}>
                 <p>※ 이창현수학 홈페이지 ID와는 연동되지 않습니다</p>
               </div>
 
-              <form onSubmit={handleSubmit} className="login-form">
+              <form onSubmit={handleSubmit} className="login-form" style={{ 
+                display: 'flex', 
+                flexDirection: 'column', 
+                gap: '12px',
+                rowGap: '12px',
+                columnGap: '0',
+                margin: '0',
+                padding: '0'
+              }}>
                 {/* 아이디 */}
-                <div className="form-group">
+                <div className="form-group" style={{ 
+                  margin: '0', 
+                  marginTop: '0', 
+                  marginBottom: '0',
+                  marginLeft: '0',
+                  marginRight: '0',
+                  padding: '0',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '6px'
+                }}>
                   <div className="input-wrapper">
                     <span className="input-icon">👤</span>
                     <input
@@ -220,7 +247,17 @@ function Login({ showModal, onClose, onShowSignUp, onLoginSuccess }) {
                 </div>
 
                 {/* 비밀번호 */}
-                <div className="form-group">
+                <div className="form-group" style={{ 
+                  margin: '0', 
+                  marginTop: '0', 
+                  marginBottom: '0',
+                  marginLeft: '0',
+                  marginRight: '0',
+                  padding: '0',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '6px'
+                }}>
                   <div className="input-wrapper">
                     <span className="input-icon">🔒</span>
                     <input
@@ -244,7 +281,17 @@ function Login({ showModal, onClose, onShowSignUp, onLoginSuccess }) {
                 </div>
 
                 {/* 자동로그인 및 아이디 찾기 */}
-                <div className="login-options">
+                <div className="login-options" style={{ 
+                  margin: '0', 
+                  marginTop: '0', 
+                  marginBottom: '0',
+                  marginLeft: '0',
+                  marginRight: '0',
+                  padding: '0',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}>
                   <label className="remember-me-label">
                     <input
                       type="checkbox"

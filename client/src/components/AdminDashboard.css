@@ -398,6 +398,76 @@
   }
 }
 
+/* 페이지네이션 */
+.admin-pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.admin-pagination .pagination-btn {
+  padding: 8px 16px;
+  background: #ffffff;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #1a1a1a;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: 'Pretendard', sans-serif;
+}
+
+.admin-pagination .pagination-btn:hover:not(:disabled) {
+  background: #f5f5f5;
+  border-color: #1a1a1a;
+}
+
+.admin-pagination .pagination-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.admin-pagination .pagination-pages {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.admin-pagination .pagination-page-btn {
+  min-width: 36px;
+  height: 36px;
+  padding: 0 12px;
+  background: #ffffff;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #1a1a1a;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: 'Pretendard', sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.admin-pagination .pagination-page-btn:hover {
+  background: #f5f5f5;
+  border-color: #1a1a1a;
+}
+
+.admin-pagination .pagination-page-btn.active {
+  background: #1a1a1a;
+  border-color: #1a1a1a;
+  color: #ffffff;
+  font-weight: 600;
+}
+
 @media (max-width: 768px) {
   .admin-header-content {
     padding: 0 20px;
@@ -419,6 +489,18 @@
 
   .admin-btn {
     width: 100%;
+  }
+
+  .admin-pagination {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .admin-pagination .pagination-page-btn {
+    min-width: 32px;
+    height: 32px;
+    padding: 0 8px;
+    font-size: 12px;
   }
 }
 

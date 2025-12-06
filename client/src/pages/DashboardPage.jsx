@@ -4,17 +4,20 @@ import MyInfoModal from '../components/MyInfoModal';
 import AssignmentDetailPage from './AssignmentDetailPage';
 import '../components/Dashboard.css';
 
-function DashboardPage({ user, onLogout, onGoToMainPage }) {
+function DashboardPage({ user, onLogout, onGoToMainPage, selectedCourse }) {
   const [activeTab, setActiveTab] = useState('all');
   const [showMyInfoModal, setShowMyInfoModal] = useState(false);
   const [selectedAssignment, setSelectedAssignment] = useState(null);
   
   // 강좌 및 과제 데이터
   const [courses, setCourses] = useState([]);
-  const [selectedCourseId, setSelectedCourseId] = useState('all');
-  const [selectedMonth, setSelectedMonth] = useState('');
+  const [selectedCourseId, setSelectedCourseId] = useState('');
   const [assignments, setAssignments] = useState([]);
   const [loading, setLoading] = useState(false);
+  
+  // 페이지네이션
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 6;
   
   // 페이지 마운트 시 상단으로 스크롤
   useEffect(() => {
@@ -28,13 +31,17 @@ function DashboardPage({ user, onLogout, onGoToMainPage }) {
     }
   }, [selectedAssignment])
 
-  // 현재 월을 기본값으로 설정
+  // 선택된 강좌가 있으면 해당 강좌로 설정
   useEffect(() => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    setSelectedMonth(`${year}-${month}`);
-  }, []);
+    if (selectedCourse && selectedCourse._id) {
+      setSelectedCourseId(selectedCourse._id);
+    }
+  }, [selectedCourse]);
+
+  // 탭이나 필터 변경 시 첫 페이지로 이동
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab, selectedCourseId]);
 
   // 학생이 등록된 강좌 목록 가져오기
   useEffect(() => {
@@ -51,7 +58,12 @@ function DashboardPage({ user, onLogout, onGoToMainPage }) {
 
       const data = await response.json();
       if (data.success) {
-        setCourses(data.data || []);
+        const coursesList = data.data || [];
+        setCourses(coursesList);
+        // 강좌가 있고 selectedCourseId가 없고 selectedCourse도 없으면 첫 번째 강좌를 선택
+        if (coursesList.length > 0 && !selectedCourseId && !selectedCourse) {
+          setSelectedCourseId(coursesList[0]._id);
+        }
       } else {
         console.error('강좌 목록 조회 실패:', data.message);
       }
@@ -62,16 +74,15 @@ function DashboardPage({ user, onLogout, onGoToMainPage }) {
     }
   };
 
-  // 선택된 강좌와 월에 해당하는 과제 필터링
+  // 선택된 강좌의 최근 한 달 과제 필터링
   useEffect(() => {
-    if (!selectedMonth) return;
-
     const filteredAssignments = [];
-    const [year, month] = selectedMonth.split('-').map(Number);
+    const now = new Date();
+    const oneMonthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
 
     courses.forEach(course => {
       // 선택된 강좌 필터링
-      if (selectedCourseId !== 'all' && course._id !== selectedCourseId) {
+      if (course._id !== selectedCourseId) {
         return;
       }
 
@@ -81,11 +92,9 @@ function DashboardPage({ user, onLogout, onGoToMainPage }) {
           if (!assignment || !assignment.startDate) return;
 
           const assignmentDate = new Date(assignment.startDate);
-          const assignmentYear = assignmentDate.getFullYear();
-          const assignmentMonth = assignmentDate.getMonth() + 1;
-
-          // 선택된 월에 해당하는 과제만 추가
-          if (assignmentYear === year && assignmentMonth === month) {
+          
+          // 최근 한 달 동안 부여된 과제만 추가
+          if (assignmentDate >= oneMonthAgo && assignmentDate <= now) {
             filteredAssignments.push({
               ...assignment,
               courseName: course.courseName,
@@ -104,7 +113,7 @@ function DashboardPage({ user, onLogout, onGoToMainPage }) {
     });
 
     setAssignments(filteredAssignments);
-  }, [courses, selectedCourseId, selectedMonth]);
+  }, [courses, selectedCourseId]);
 
   // 탭별 필터링된 과제
   const getFilteredAssignments = () => {
@@ -114,21 +123,27 @@ function DashboardPage({ user, onLogout, onGoToMainPage }) {
     return assignments;
   };
 
-  // 통계 계산
+  // 통계 계산 - 제출 상태 기반
   const calculateStats = () => {
     const filtered = getFilteredAssignments();
-    const now = new Date();
     
-    const inProgress = filtered.filter(a => {
-      const startDate = new Date(a.startDate);
-      const dueDate = new Date(a.dueDate);
-      return startDate <= now && now <= dueDate;
-    }).length;
+    // 제출 상태 확인 함수
+    const isSubmitted = (assignment) => {
+      const submission = assignment.submissions?.find(
+        sub => {
+          const subStudentId = sub.studentId?._id || sub.studentId;
+          const userId = user._id;
+          return subStudentId && userId && String(subStudentId) === String(userId);
+        }
+      );
+      return !!submission;
+    };
+    
+    // 진행중인 과제: 제출전인 과제의 개수
+    const inProgress = filtered.filter(a => !isSubmitted(a)).length;
 
-    const completed = filtered.filter(a => {
-      const dueDate = new Date(a.dueDate);
-      return now > dueDate;
-    }).length;
+    // 완료된 과제: 제출완료된 과제의 개수
+    const completed = filtered.filter(a => isSubmitted(a)).length;
 
     return {
       inProgress,
@@ -139,6 +154,18 @@ function DashboardPage({ user, onLogout, onGoToMainPage }) {
 
   const currentData = calculateStats();
   const filteredAssignments = getFilteredAssignments();
+  
+  // 페이지네이션 계산
+  const totalPages = Math.ceil(filteredAssignments.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedAssignments = filteredAssignments.slice(startIndex, endIndex);
+  
+  // 페이지 변경 핸들러
+  const handlePageChange = (page) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+  };
 
   // 날짜 포맷팅
   const formatDate = (dateString) => {
@@ -221,22 +248,16 @@ function DashboardPage({ user, onLogout, onGoToMainPage }) {
                 value={selectedCourseId}
                 onChange={(e) => setSelectedCourseId(e.target.value)}
               >
-                <option value="all">전체</option>
-                {courses.map(course => (
-                  <option key={course._id} value={course._id}>
-                    {course.courseName}
-                  </option>
-                ))}
+                {courses.length === 0 ? (
+                  <option value="">등록된 반이 없습니다</option>
+                ) : (
+                  courses.map(course => (
+                    <option key={course._id} value={course._id}>
+                      {course.courseName}
+                    </option>
+                  ))
+                )}
               </select>
-            </div>
-            <div className="filter-group">
-              <label className="filter-label">월 선택</label>
-              <input
-                type="month"
-                className="filter-select"
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(e.target.value)}
-              />
             </div>
           </div>
         </div>
@@ -250,6 +271,19 @@ function DashboardPage({ user, onLogout, onGoToMainPage }) {
             <h1 className="dashboard-title">
               {user?.name || '학생'}학생의 TEST 현황
             </h1>
+            <p className="dashboard-date-range">
+              {(() => {
+                const now = new Date();
+                const oneMonthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+                const formatDate = (date) => {
+                  const year = date.getFullYear();
+                  const month = String(date.getMonth() + 1).padStart(2, '0');
+                  const day = String(date.getDate()).padStart(2, '0');
+                  return `${year}.${month}.${day}`;
+                };
+                return `${formatDate(oneMonthAgo)} ~ ${formatDate(now)}`;
+              })()}
+            </p>
           </div>
 
           {/* 탭 */}
@@ -310,8 +344,9 @@ function DashboardPage({ user, onLogout, onGoToMainPage }) {
                 <p>선택한 조건에 해당하는 과제가 없습니다.</p>
               </div>
             ) : (
-              <div className="assignments-grid">
-                {filteredAssignments.map(assignment => {
+              <>
+                <div className="assignments-grid">
+                  {paginatedAssignments.map(assignment => {
                   // 제출 상태 확인
                   const submission = assignment.submissions?.find(
                     sub => {
@@ -322,24 +357,36 @@ function DashboardPage({ user, onLogout, onGoToMainPage }) {
                   );
                   const isSubmitted = !!submission;
                   
+                  // 제출 기간 확인
+                  const now = new Date();
+                  const dueDate = new Date(assignment.dueDate);
+                  const isExpired = now > dueDate;
+                  
+                  // 뱃지 상태 결정
+                  let statusBadge = null;
+                  if (isExpired) {
+                    // 제출 기간이 지난 경우
+                    if (isSubmitted) {
+                      statusBadge = <span className="status-badge status-late-submitted">제출 후 마감</span>;
+                    } else {
+                      statusBadge = <span className="status-badge status-expired">기간 만료</span>;
+                    }
+                  } else {
+                    // 제출 기간 내
+                    if (isSubmitted) {
+                      statusBadge = <span className="status-badge status-submitted">제출완료</span>;
+                    } else {
+                      statusBadge = <span className="status-badge status-pending">제출전</span>;
+                    }
+                  }
+                  
                   return (
                     <div
                       key={assignment._id}
                       className="assignment-card"
                       onClick={() => {
-                        // 이미지 파일이 있는 경우에만 상세 페이지로 이동
-                        const hasImages = assignment.fileUrl && 
-                          Array.isArray(assignment.fileUrl) && 
-                          assignment.fileUrl.length > 0 &&
-                          assignment.fileType && 
-                          Array.isArray(assignment.fileType) &&
-                          assignment.fileType.some(type => type === 'image');
-                        
-                        if (hasImages) {
-                          setSelectedAssignment(assignment);
-                        } else {
-                          alert('이 과제에는 이미지 파일이 없습니다.');
-                        }
+                        // 이미지가 없어도 빈 캔버스로 필기할 수 있도록 상세 페이지로 이동
+                        setSelectedAssignment(assignment);
                       }}
                     >
                       <div className="assignment-card-header">
@@ -347,11 +394,7 @@ function DashboardPage({ user, onLogout, onGoToMainPage }) {
                           {assignment.assignmentType === 'QUIZ' ? 'QUIZ' : '실전TEST'}
                         </div>
                         <div className="assignment-status-badge">
-                          {isSubmitted ? (
-                            <span className="status-badge status-submitted">제출완료</span>
-                          ) : (
-                            <span className="status-badge status-pending">제출전</span>
-                          )}
+                          {statusBadge}
                         </div>
                         <div className="assignment-course-name">{assignment.courseName}</div>
                       </div>
@@ -382,19 +425,8 @@ function DashboardPage({ user, onLogout, onGoToMainPage }) {
                             className="assignment-submit-btn"
                             onClick={(e) => {
                               e.stopPropagation();
-                              // 이미지 파일이 있는 경우에만 상세 페이지로 이동
-                              const hasImages = assignment.fileUrl && 
-                                Array.isArray(assignment.fileUrl) && 
-                                assignment.fileUrl.length > 0 &&
-                                assignment.fileType && 
-                                Array.isArray(assignment.fileType) &&
-                                assignment.fileType.some(type => type === 'image');
-                              
-                              if (hasImages) {
-                                setSelectedAssignment(assignment);
-                              } else {
-                                alert('이 과제에는 이미지 파일이 없습니다.');
-                              }
+                              // 이미지가 없어도 빈 캔버스로 필기할 수 있도록 상세 페이지로 이동
+                              setSelectedAssignment(assignment);
                             }}
                           >
                             답안 제출하기
@@ -415,7 +447,39 @@ function DashboardPage({ user, onLogout, onGoToMainPage }) {
                     </div>
                   );
                 })}
-              </div>
+                </div>
+                
+                {/* 페이지네이션 */}
+                {totalPages > 1 && (
+                  <div className="dashboard-pagination">
+                    <button
+                      className="pagination-btn"
+                      onClick={() => handlePageChange(currentPage - 1)}
+                      disabled={currentPage === 1}
+                    >
+                      이전
+                    </button>
+                    <div className="pagination-pages">
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                        <button
+                          key={page}
+                          className={`pagination-page-btn ${currentPage === page ? 'active' : ''}`}
+                          onClick={() => handlePageChange(page)}
+                        >
+                          {page}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      className="pagination-btn"
+                      onClick={() => handlePageChange(currentPage + 1)}
+                      disabled={currentPage === totalPages}
+                    >
+                      다음
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>

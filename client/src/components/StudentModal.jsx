@@ -145,11 +145,13 @@ function StudentModal({ showModal, onClose, student, onSave, mode }) {
       }
 
       await onSave(submitData, mode === 'edit' ? student._id : null);
+      // 성공적으로 완료된 경우에만 모달 닫기
+      setIsSubmitting(false);
       onClose();
     } catch (error) {
       console.error('저장 오류:', error);
-    } finally {
       setIsSubmitting(false);
+      // 에러 발생 시 모달은 열어둠
     }
   };
 
@@ -158,7 +160,12 @@ function StudentModal({ showModal, onClose, student, onSave, mode }) {
   }
 
   return (
-    <div className="student-modal-overlay" onClick={onClose}>
+    <div className="student-modal-overlay" onClick={(e) => {
+      // 작업 중이 아닐 때만 overlay 클릭으로 닫기
+      if (!isSubmitting && e.target === e.currentTarget) {
+        onClose();
+      }
+    }}>
       <div className="student-modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="student-modal-header">
           <h2 className="student-modal-title">

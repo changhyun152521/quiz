@@ -132,7 +132,12 @@ function TermsModal({ type, onClose }) {
   const content = termsContent[type] || { title: '', content: '' };
 
   return (
-    <div className="terms-modal-overlay" onClick={onClose}>
+    <div className="terms-modal-overlay" onClick={(e) => {
+      // overlay 클릭으로 닫기 (확인 버튼으로도 닫을 수 있음)
+      if (e.target === e.currentTarget) {
+        onClose();
+      }
+    }}>
       <div className="terms-modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="terms-modal-header">
           <h2>{content.title}</h2>

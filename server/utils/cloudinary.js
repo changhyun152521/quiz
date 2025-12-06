@@ -21,9 +21,11 @@ const uploadFile = async (filePath, options = {}) => {
 };
 
 // 파일 삭제 함수
-const deleteFile = async (publicId) => {
+const deleteFile = async (publicId, resourceType = 'image') => {
   try {
-    const result = await cloudinary.uploader.destroy(publicId);
+    const result = await cloudinary.uploader.destroy(publicId, {
+      resource_type: resourceType // 'image', 'raw' (PDF 등), 'video' 등
+    });
     return result;
   } catch (error) {
     throw new Error(`Cloudinary 삭제 실패: ${error.message}`);

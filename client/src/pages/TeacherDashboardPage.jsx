@@ -4,7 +4,6 @@ import StudentModal from '../components/StudentModal';
 import CourseModal from '../components/CourseModal';
 import AssignmentModal from '../components/AssignmentModal';
 import CourseAssignmentModal from '../components/CourseAssignmentModal';
-import AnswerModal from '../components/AnswerModal';
 import TestResultModal from '../components/TestResultModal';
 import MyInfoModal from '../components/MyInfoModal';
 import '../components/AdminDashboard.css';
@@ -24,6 +23,7 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [studentModalMode, setStudentModalMode] = useState('create');
   const [studentSearchTerm, setStudentSearchTerm] = useState('');
+  const [currentPageStudents, setCurrentPageStudents] = useState(1);
 
   // 강좌 관리 상태
   const [courses, setCourses] = useState([]);
@@ -37,6 +37,7 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
   const [selectedCourseForAssignment, setSelectedCourseForAssignment] = useState(null);
   const [showTestResultModal, setShowTestResultModal] = useState(false);
   const [selectedCourseForTest, setSelectedCourseForTest] = useState(null);
+  const [currentPageCourses, setCurrentPageCourses] = useState(1);
 
   // 과제 관리 상태
   const [assignments, setAssignments] = useState([]);
@@ -46,9 +47,10 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
   const [assignmentModalMode, setAssignmentModalMode] = useState('create');
   const [assignmentSearchTerm, setAssignmentSearchTerm] = useState('');
   const [allAssignments, setAllAssignments] = useState([]); // 강좌에 추가할 수 있는 모든 과제 목록
-  const [showAnswerModal, setShowAnswerModal] = useState(false);
-  const [selectedAssignmentForAnswer, setSelectedAssignmentForAnswer] = useState(null);
   const [showMyInfoModal, setShowMyInfoModal] = useState(false);
+  const [currentPageAssignments, setCurrentPageAssignments] = useState(1);
+
+  const itemsPerPage = 8;
 
   // 학생 목록 가져오기
   const fetchStudents = async () => {
@@ -141,17 +143,14 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
     }
   };
 
+  // 페이지 최초 로드 시 한 번만 데이터 가져오기
   useEffect(() => {
-    if (activeSection === 'students') {
-      fetchStudents();
-    } else if (activeSection === 'courses') {
-      fetchCourses();
-      fetchTeacherList();
-      fetchAllAssignments(); // 강좌에 추가할 수 있는 모든 과제 목록 가져오기
-    } else if (activeSection === 'assignments') {
-      fetchAssignments();
-    }
-  }, [activeSection]);
+    fetchStudents();
+    fetchCourses();
+    fetchTeacherList();
+    fetchAllAssignments();
+    fetchAssignments();
+  }, []); // 빈 배열로 최초 한 번만 실행
 
   // 학생 저장 (생성 또는 수정)
   const handleSaveStudent = async (formData, studentId) => {
@@ -168,12 +167,15 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
       }
 
       const data = await response.json();
-      if (response.ok) {
+      if (response.ok && data.success) {
         alert(studentId ? '학생 정보가 수정되었습니다.' : '학생이 추가되었습니다.');
-        fetchStudents();
+        // 상태 업데이트는 모달이 닫힌 후에 수행
+        setTimeout(() => {
+          fetchStudents();
+        }, 100);
       } else {
         alert(data.message || '저장에 실패했습니다.');
-        throw new Error(data.message);
+        throw new Error(data.message || '저장에 실패했습니다.');
       }
     } catch (error) {
       console.error('저장 오류:', error);
@@ -233,12 +235,15 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
       }
 
       const data = await response.json();
-      if (response.ok) {
+      if (response.ok && data.success) {
         alert(courseId ? '강좌 정보가 수정되었습니다.' : '강좌가 추가되었습니다.');
-        fetchCourses();
+        // 상태 업데이트는 모달이 닫힌 후에 수행
+        setTimeout(() => {
+          fetchCourses();
+        }, 100);
       } else {
         alert(data.message || '저장에 실패했습니다.');
-        throw new Error(data.message);
+        throw new Error(data.message || '저장에 실패했습니다.');
       }
     } catch (error) {
       console.error('저장 오류:', error);
@@ -292,7 +297,16 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
       const data = await response.json();
       if (response.ok) {
         alert('과제가 강좌에 추가되었습니다.');
-        fetchCourses();
+        // 강좌 목록 업데이트
+        await fetchCourses();
+        // 모달에 표시되는 강좌 정보도 업데이트
+        if (selectedCourseForAssignment && selectedCourseForAssignment._id === courseId) {
+          const updatedCourseResponse = await get(`/api/courses/${courseId}`);
+          const updatedCourseData = await updatedCourseResponse.json();
+          if (updatedCourseData.success) {
+            setSelectedCourseForAssignment(updatedCourseData.data);
+          }
+        }
       } else {
         alert(data.message || '과제 추가에 실패했습니다.');
       }
@@ -315,7 +329,16 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
       const data = await response.json();
       if (response.ok) {
         alert('과제가 강좌에서 제거되었습니다.');
-        fetchCourses();
+        // 강좌 목록 업데이트
+        await fetchCourses();
+        // 모달에 표시되는 강좌 정보도 업데이트
+        if (selectedCourseForAssignment && selectedCourseForAssignment._id === courseId) {
+          const updatedCourseResponse = await get(`/api/courses/${courseId}`);
+          const updatedCourseData = await updatedCourseResponse.json();
+          if (updatedCourseData.success) {
+            setSelectedCourseForAssignment(updatedCourseData.data);
+          }
+        }
       } else {
         alert(data.message || '과제 제거에 실패했습니다.');
       }
@@ -340,12 +363,15 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
       }
 
       const data = await response.json();
-      if (response.ok) {
+      if (response.ok && data.success) {
         alert(assignmentId ? '과제 정보가 수정되었습니다.' : '과제가 추가되었습니다.');
-        fetchAssignments();
+        // 상태 업데이트는 모달이 닫힌 후에 수행
+        setTimeout(() => {
+          fetchAssignments();
+        }, 100);
       } else {
         alert(data.message || '저장에 실패했습니다.');
-        throw new Error(data.message);
+        throw new Error(data.message || '저장에 실패했습니다.');
       }
     } catch (error) {
       console.error('저장 오류:', error);
@@ -390,47 +416,6 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
     setShowAssignmentModal(true);
   };
 
-  // 정답 입력 모달 열기
-  const handleOpenAnswerModal = async (assignment) => {
-    // 과제 정보를 그대로 사용 (answers 필드가 이미 포함되어 있음)
-    setSelectedAssignmentForAnswer(assignment);
-    setShowAnswerModal(true);
-  };
-
-  // 정답 저장 (과제에 직접 저장)
-  const handleSaveAnswers = async (answers, assignmentId) => {
-    try {
-      const token = localStorage.getItem('token');
-      
-      // answers 배열을 score 필드로 변환 (AnswerModal에서 score를 사용하므로)
-      const formattedAnswers = answers.map(ans => ({
-        questionNumber: ans.questionNumber,
-        answer: ans.answer,
-        score: ans.score || 1
-      }));
-
-      // Assignment 업데이트 API 호출
-      const response = await put(`/api/assignments/${assignmentId}`, {
-        answers: formattedAnswers
-      });
-
-      const data = await response.json();
-      if (response.ok && data.success) {
-        alert('정답이 저장되었습니다.');
-        // 과제 목록 새로고침
-        fetchAssignments();
-        setShowAnswerModal(false);
-        setSelectedAssignmentForAnswer(null);
-      } else {
-        alert(data.message || '정답 저장에 실패했습니다.');
-        throw new Error(data.message || '정답 저장 실패');
-      }
-    } catch (error) {
-      console.error('정답 저장 오류:', error);
-      alert('정답 저장 중 오류가 발생했습니다: ' + (error.message || '알 수 없는 오류'));
-      throw error;
-    }
-  };
 
   // 검색 필터링
   const filteredStudents = students.filter(student => {
@@ -463,6 +448,30 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
       assignment.assignmentType?.toLowerCase().includes(term)
     );
   });
+
+  // 페이지네이션 계산
+  const getPaginatedItems = (items, currentPage) => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return items.slice(startIndex, endIndex);
+  };
+
+  const getTotalPages = (items) => {
+    return Math.ceil(items.length / itemsPerPage);
+  };
+
+  // 검색어 변경 시 첫 페이지로 리셋
+  useEffect(() => {
+    setCurrentPageStudents(1);
+  }, [studentSearchTerm]);
+
+  useEffect(() => {
+    setCurrentPageCourses(1);
+  }, [courseSearchTerm]);
+
+  useEffect(() => {
+    setCurrentPageAssignments(1);
+  }, [assignmentSearchTerm]);
 
   return (
     <div className="admin-dashboard">
@@ -552,6 +561,13 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
                     >
                       + 학생 추가
                     </button>
+                    <button 
+                      className="admin-btn admin-btn-secondary"
+                      onClick={fetchStudents}
+                      disabled={loading}
+                    >
+                      🔄 새로고침
+                    </button>
                     <input
                       type="text"
                       placeholder="이름, 아이디, 이메일, 학교명으로 검색..."
@@ -583,7 +599,7 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
                           </tr>
                         </thead>
                         <tbody>
-                          {filteredStudents.map((student) => (
+                          {getPaginatedItems(filteredStudents, currentPageStudents).map((student) => (
                             <tr key={student._id}>
                               <td>{student.name}</td>
                               <td>{student.userId}</td>
@@ -613,6 +629,36 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
                       </table>
                     )}
                   </div>
+                  {/* 학생 페이지네이션 */}
+                  {getTotalPages(filteredStudents) > 1 && (
+                    <div className="admin-pagination">
+                      <button
+                        className="pagination-btn"
+                        onClick={() => setCurrentPageStudents(currentPageStudents - 1)}
+                        disabled={currentPageStudents === 1}
+                      >
+                        이전
+                      </button>
+                      <div className="pagination-pages">
+                        {Array.from({ length: getTotalPages(filteredStudents) }, (_, i) => i + 1).map(page => (
+                          <button
+                            key={page}
+                            className={`pagination-page-btn ${currentPageStudents === page ? 'active' : ''}`}
+                            onClick={() => setCurrentPageStudents(page)}
+                          >
+                            {page}
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        className="pagination-btn"
+                        onClick={() => setCurrentPageStudents(currentPageStudents + 1)}
+                        disabled={currentPageStudents === getTotalPages(filteredStudents)}
+                      >
+                        다음
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -625,6 +671,17 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
                       onClick={handleAddCourse}
                     >
                       + 강좌 추가
+                    </button>
+                    <button 
+                      className="admin-btn admin-btn-secondary"
+                      onClick={() => {
+                        fetchCourses();
+                        fetchTeacherList();
+                        fetchAllAssignments();
+                      }}
+                      disabled={coursesLoading}
+                    >
+                      🔄 새로고침
                     </button>
                     <input
                       type="text"
@@ -655,7 +712,7 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
                           </tr>
                         </thead>
                         <tbody>
-                          {filteredCourses.map((course) => (
+                          {getPaginatedItems(filteredCourses, currentPageCourses).map((course) => (
                             <tr key={course._id}>
                               <td>{course.courseName}</td>
                               <td>
@@ -710,6 +767,36 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
                       </table>
                     )}
                   </div>
+                  {/* 강좌 페이지네이션 */}
+                  {getTotalPages(filteredCourses) > 1 && (
+                    <div className="admin-pagination">
+                      <button
+                        className="pagination-btn"
+                        onClick={() => setCurrentPageCourses(currentPageCourses - 1)}
+                        disabled={currentPageCourses === 1}
+                      >
+                        이전
+                      </button>
+                      <div className="pagination-pages">
+                        {Array.from({ length: getTotalPages(filteredCourses) }, (_, i) => i + 1).map(page => (
+                          <button
+                            key={page}
+                            className={`pagination-page-btn ${currentPageCourses === page ? 'active' : ''}`}
+                            onClick={() => setCurrentPageCourses(page)}
+                          >
+                            {page}
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        className="pagination-btn"
+                        onClick={() => setCurrentPageCourses(currentPageCourses + 1)}
+                        disabled={currentPageCourses === getTotalPages(filteredCourses)}
+                      >
+                        다음
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -722,6 +809,13 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
                       onClick={handleAddAssignment}
                     >
                       + 과제 추가
+                    </button>
+                    <button 
+                      className="admin-btn admin-btn-secondary"
+                      onClick={fetchAssignments}
+                      disabled={assignmentsLoading}
+                    >
+                      🔄 새로고침
                     </button>
                     <input
                       type="text"
@@ -754,7 +848,7 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
                           </tr>
                         </thead>
                         <tbody>
-                          {filteredAssignments.map((assignment) => (
+                          {getPaginatedItems(filteredAssignments, currentPageAssignments).map((assignment) => (
                             <tr key={assignment._id}>
                               <td>{assignment.assignmentName}</td>
                               <td>{assignment.subject}</td>
@@ -772,13 +866,6 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
                               </td>
                               <td>
                                 <div className="table-actions">
-                                  <button
-                                    className="action-btn answer-btn"
-                                    onClick={() => handleOpenAnswerModal(assignment)}
-                                    title="정답 입력"
-                                  >
-                                    정답
-                                  </button>
                                   <button
                                     className="action-btn edit-btn"
                                     onClick={() => handleEditAssignment(assignment)}
@@ -799,6 +886,36 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
                       </table>
                     )}
                   </div>
+                  {/* 과제 페이지네이션 */}
+                  {getTotalPages(filteredAssignments) > 1 && (
+                    <div className="admin-pagination">
+                      <button
+                        className="pagination-btn"
+                        onClick={() => setCurrentPageAssignments(currentPageAssignments - 1)}
+                        disabled={currentPageAssignments === 1}
+                      >
+                        이전
+                      </button>
+                      <div className="pagination-pages">
+                        {Array.from({ length: getTotalPages(filteredAssignments) }, (_, i) => i + 1).map(page => (
+                          <button
+                            key={page}
+                            className={`pagination-page-btn ${currentPageAssignments === page ? 'active' : ''}`}
+                            onClick={() => setCurrentPageAssignments(page)}
+                          >
+                            {page}
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        className="pagination-btn"
+                        onClick={() => setCurrentPageAssignments(currentPageAssignments + 1)}
+                        disabled={currentPageAssignments === getTotalPages(filteredAssignments)}
+                      >
+                        다음
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -864,6 +981,12 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
         allAssignments={allAssignments}
         onAddAssignment={handleAddAssignmentToCourse}
         onRemoveAssignment={handleRemoveAssignmentFromCourse}
+        onCreateAssignment={(newAssignment) => {
+          // 새로 생성된 과제를 allAssignments에 추가
+          setAllAssignments(prev => [newAssignment, ...prev]);
+          // 과제 목록 새로고침
+          fetchAssignments();
+        }}
       />
 
       <TestResultModal
@@ -873,18 +996,9 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
           setSelectedCourseForTest(null);
         }}
         course={selectedCourseForTest}
+        allAssignments={allAssignments}
       />
 
-      <AnswerModal
-        showModal={showAnswerModal}
-        onClose={() => {
-          setShowAnswerModal(false);
-          setSelectedAssignmentForAnswer(null);
-        }}
-        assignment={selectedAssignmentForAnswer}
-        onSave={handleSaveAnswers}
-        mode="edit"
-      />
 
       <MyInfoModal
         showModal={showMyInfoModal}

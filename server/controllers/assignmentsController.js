@@ -1,4 +1,5 @@
 const Assignment = require('../models/Assignment');
+const { deleteFile } = require('../utils/cloudinary');
 
 // GET /api/assignments - 모든 과제 조회 (페이지네이션 지원)
 const getAllAssignments = async (req, res) => {
@@ -315,10 +316,43 @@ const updateAssignment = async (req, res) => {
   }
 };
 
+// Cloudinary URL에서 public_id와 resource_type 추출 함수
+const extractPublicIdFromUrl = (url) => {
+  if (!url || typeof url !== 'string') return null;
+  
+  try {
+    // Cloudinary URL 형식: https://res.cloudinary.com/{cloud_name}/{resource_type}/upload/{version}/{public_id}.{format}
+    // 또는: https://res.cloudinary.com/{cloud_name}/{resource_type}/upload/v{version}/{public_id}.{format}
+    const cloudinaryPattern = /\/res\.cloudinary\.com\/[^\/]+\/([^\/]+)\/upload\/(?:v\d+\/)?(.+?)(?:\.[^.]+)?(?:\?.*)?$/;
+    const match = url.match(cloudinaryPattern);
+    
+    if (match && match[1] && match[2]) {
+      const resourceType = match[1]; // 'image', 'raw', 'video' 등
+      let publicId = match[2];
+      
+      // URL 디코딩
+      publicId = decodeURIComponent(publicId);
+      // 쿼리 파라미터 제거
+      publicId = publicId.split('?')[0];
+      
+      return {
+        publicId,
+        resourceType: resourceType === 'raw' ? 'raw' : 'image' // PDF는 raw, 이미지는 image
+      };
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('public_id 추출 오류:', error);
+    return null;
+  }
+};
+
 // DELETE /api/assignments/:id - 과제 삭제
 const deleteAssignment = async (req, res) => {
   try {
-    const assignment = await Assignment.findByIdAndDelete(req.params.id);
+    // 삭제 전에 과제 정보 가져오기 (Cloudinary 파일 삭제를 위해)
+    const assignment = await Assignment.findById(req.params.id);
 
     if (!assignment) {
       return res.status(404).json({
@@ -327,11 +361,50 @@ const deleteAssignment = async (req, res) => {
       });
     }
 
+    // Cloudinary에 업로드된 파일 삭제
+    const fileUrls = Array.isArray(assignment.fileUrl) ? assignment.fileUrl : (assignment.fileUrl ? [assignment.fileUrl] : []);
+    const fileTypes = Array.isArray(assignment.fileType) ? assignment.fileType : (assignment.fileType ? [assignment.fileType] : []);
+    const deletePromises = [];
+
+    for (let i = 0; i < fileUrls.length; i++) {
+      const fileUrl = fileUrls[i];
+      const fileType = fileTypes[i] || 'image'; // 기본값은 image
+      
+      if (fileUrl) {
+        const urlInfo = extractPublicIdFromUrl(fileUrl);
+        if (urlInfo && urlInfo.publicId) {
+          // fileType에 따라 resource_type 결정
+          const resourceType = fileType === 'pdf' ? 'raw' : 'image';
+          
+          // Cloudinary에서 파일 삭제
+          deletePromises.push(
+            deleteFile(urlInfo.publicId, resourceType).catch(error => {
+              // 개별 파일 삭제 실패는 로그만 남기고 계속 진행
+              console.error(`Cloudinary 파일 삭제 실패 (public_id: ${urlInfo.publicId}, resource_type: ${resourceType}):`, error.message);
+              return null; // 에러를 throw하지 않고 null 반환
+            })
+          );
+        } else {
+          console.warn(`Cloudinary URL에서 public_id를 추출할 수 없습니다: ${fileUrl}`);
+        }
+      }
+    }
+
+    // 모든 파일 삭제 시도 (일부 실패해도 계속 진행)
+    if (deletePromises.length > 0) {
+      await Promise.all(deletePromises);
+      console.log(`${deletePromises.length}개의 Cloudinary 파일 삭제 시도 완료`);
+    }
+
+    // 과제 삭제
+    await Assignment.findByIdAndDelete(req.params.id);
+
     res.json({
       success: true,
       message: '과제가 삭제되었습니다'
     });
   } catch (error) {
+    console.error('과제 삭제 오류:', error);
     res.status(500).json({
       success: false,
       message: '과제 삭제 실패',
