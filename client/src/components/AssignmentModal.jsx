@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { get, post } from '../utils/api';
 import './AssignmentModal.css';
 
 function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
@@ -45,7 +46,7 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
         await loadCloudinaryScript();
 
         // 서버에서 Cloudinary 설정 가져오기
-        const configResponse = await fetch('http://localhost:5000/api/cloudinary/config');
+        const configResponse = await get('/api/cloudinary/config');
         
         if (!configResponse.ok) {
           const errorData = await configResponse.json().catch(() => ({ message: '서버 오류가 발생했습니다' }));
@@ -88,11 +89,7 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
             
             widgetConfig.uploadSignature = async (callback, paramsToSign) => {
               try {
-                const response = await fetch('http://localhost:5000/api/cloudinary/signature', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(paramsToSign)
-                });
+                const response = await post('/api/cloudinary/signature', paramsToSign);
                 const data = await response.json();
                 if (data.signature) {
                   callback(data.signature);

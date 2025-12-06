@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { get, post, put, del, patch } from '../utils/api';
 import StudentModal from '../components/StudentModal';
 import CourseModal from '../components/CourseModal';
 import AssignmentModal from '../components/AssignmentModal';
@@ -48,14 +49,7 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
   const fetchStudents = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/users?limit=100', {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const response = await get('/api/users?limit=100');
 
       const data = await response.json();
       if (data.success) {
@@ -76,14 +70,7 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
   // 강사 목록 가져오기 (강좌용)
   const fetchTeacherList = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/courses/teachers', {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const response = await get('/api/courses/teachers');
 
       const data = await response.json();
       if (data.success) {
@@ -98,14 +85,7 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
   const fetchCourses = async () => {
     setCoursesLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/courses?limit=100', {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const response = await get('/api/courses?limit=100');
 
       const data = await response.json();
       if (data.success) {
@@ -125,14 +105,7 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
   const fetchAssignments = async () => {
     setAssignmentsLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/assignments?limit=100', {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const response = await get('/api/assignments?limit=100');
 
       const data = await response.json();
       if (data.success) {
@@ -152,13 +125,7 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
   const fetchAllAssignments = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/assignments?limit=100', {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const response = await get('/api/assignments?limit=100');
 
       const data = await response.json();
       if (data.success) {
@@ -189,24 +156,10 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
 
       if (studentId) {
         // 수정
-        response = await fetch(`http://localhost:5000/api/users/${studentId}`, {
-          method: 'PUT',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(formData)
-        });
+        response = await put(`/api/users/${studentId}`, formData);
       } else {
         // 생성
-        response = await fetch('http://localhost:5000/api/users', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(formData)
-        });
+        response = await post('/api/users', formData);
       }
 
       const data = await response.json();
@@ -231,13 +184,7 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/users/${studentId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const response = await del(`/api/users/${studentId}`);
 
       const data = await response.json();
       if (response.ok) {
@@ -274,24 +221,10 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
 
       if (courseId) {
         // 수정
-        response = await fetch(`http://localhost:5000/api/courses/${courseId}`, {
-          method: 'PUT',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(formData)
-        });
+        response = await put(`/api/courses/${courseId}`, formData);
       } else {
         // 생성
-        response = await fetch('http://localhost:5000/api/courses', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(formData)
-        });
+        response = await post('/api/courses', formData);
       }
 
       const data = await response.json();
@@ -316,13 +249,7 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/courses/${courseId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const response = await del(`/api/courses/${courseId}`);
 
       const data = await response.json();
       if (response.ok) {
@@ -355,14 +282,7 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
   const handleAddAssignmentToCourse = async (courseId, assignmentId) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/courses/${courseId}/assignments`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ assignmentId })
-      });
+      const response = await post(`/api/courses/${courseId}/assignments`, { assignmentId });
 
       const data = await response.json();
       if (response.ok) {
@@ -385,13 +305,7 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/courses/${courseId}/assignments/${assignmentId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const response = await del(`/api/courses/${courseId}/assignments/${assignmentId}`);
 
       const data = await response.json();
       if (response.ok) {
@@ -414,24 +328,10 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
 
       if (assignmentId) {
         // 수정
-        response = await fetch(`http://localhost:5000/api/assignments/${assignmentId}`, {
-          method: 'PUT',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(formData)
-        });
+        response = await put(`/api/assignments/${assignmentId}`, formData);
       } else {
         // 생성
-        response = await fetch('http://localhost:5000/api/assignments', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(formData)
-        });
+        response = await post('/api/assignments', formData);
       }
 
       const data = await response.json();
@@ -456,13 +356,7 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/assignments/${assignmentId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const response = await del(`/api/assignments/${assignmentId}`);
 
       const data = await response.json();
       if (response.ok) {
@@ -511,15 +405,8 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
       }));
 
       // Assignment 업데이트 API 호출
-      const response = await fetch(`http://localhost:5000/api/assignments/${assignmentId}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          answers: formattedAnswers
-        })
+      const response = await put(`/api/assignments/${assignmentId}`, {
+        answers: formattedAnswers
       });
 
       const data = await response.json();
@@ -999,15 +886,7 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
         onClose={() => setShowMyInfoModal(false)}
         user={user}
         onUpdateUser={async (formData) => {
-          const token = localStorage.getItem('token');
-          const response = await fetch(`http://localhost:5000/api/users/${user._id}`, {
-            method: 'PUT',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(formData)
-          });
+          const response = await put(`/api/users/${user._id}`, formData);
 
           const data = await response.json();
           if (!response.ok || !data.success) {
@@ -1020,15 +899,7 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
           window.location.reload(); // 페이지 새로고침하여 업데이트된 정보 반영
         }}
         onUpdatePassword={async (passwordData) => {
-          const token = localStorage.getItem('token');
-          const response = await fetch(`http://localhost:5000/api/users/${user._id}/password`, {
-            method: 'PATCH',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(passwordData)
-          });
+          const response = await patch(`/api/users/${user._id}/password`, passwordData);
 
           const data = await response.json();
           if (!response.ok || !data.success) {
@@ -1036,14 +907,7 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
           }
         }}
         onDeleteUser={async () => {
-          const token = localStorage.getItem('token');
-          const response = await fetch(`http://localhost:5000/api/users/${user._id}`, {
-            method: 'DELETE',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            }
-          });
+          const response = await del(`/api/users/${user._id}`);
 
           const data = await response.json();
           if (!response.ok || !data.success) {

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { post } from '../utils/api';
 import '../components/AssignmentDetail.css';
 
 function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) {
@@ -553,15 +554,8 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
         answer: a.answer.trim()
       }));
 
-      const response = await fetch(`http://localhost:5000/api/assignments/${assignment._id}/submit`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          studentAnswers: studentAnswers
-        })
+      const response = await post(`/api/assignments/${assignment._id}/submit`, {
+        studentAnswers: studentAnswers
       });
 
       const data = await response.json();

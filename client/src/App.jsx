@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { get } from './utils/api'
 import MainPage from './pages/MainPage'
 import DashboardPage from './pages/DashboardPage'
 import AdminDashboardPage from './pages/AdminDashboardPage'
@@ -21,12 +22,7 @@ function App() {
       if (token && userData) {
         try {
           // 토큰 유효성 검증
-          const response = await fetch('http://localhost:5000/api/auth/verify', {
-            method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${token}`
-            }
-          })
+          const response = await get('/api/auth/verify')
           
           const data = await response.json()
           if (data.success) {
@@ -106,12 +102,7 @@ function App() {
       }
 
       try {
-        const response = await fetch('http://localhost:5000/api/auth/verify', {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
+        const response = await get('/api/auth/verify');
 
         const data = await response.json();
         if (!data.success) {

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { get, put, del, patch } from '../utils/api';
 import MyInfoModal from '../components/MyInfoModal';
 import AssignmentDetailPage from './AssignmentDetailPage';
 import '../components/Dashboard.css';
@@ -34,14 +35,7 @@ function DashboardPage({ user, onLogout, onGoToMainPage }) {
   const fetchCourses = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/courses/student/${user._id}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const response = await get(`/api/courses/student/${user._id}`);
 
       const data = await response.json();
       if (data.success) {
@@ -433,14 +427,7 @@ function DashboardPage({ user, onLogout, onGoToMainPage }) {
         user={user}
         onUpdateUser={async (formData) => {
           const token = localStorage.getItem('token');
-          const response = await fetch(`http://localhost:5000/api/users/${user._id}`, {
-            method: 'PUT',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(formData)
-          });
+          const response = await put(`/api/users/${user._id}`, formData);
 
           const data = await response.json();
           if (!response.ok || !data.success) {
@@ -453,15 +440,7 @@ function DashboardPage({ user, onLogout, onGoToMainPage }) {
           window.location.reload(); // 페이지 새로고침하여 업데이트된 정보 반영
         }}
         onUpdatePassword={async (passwordData) => {
-          const token = localStorage.getItem('token');
-          const response = await fetch(`http://localhost:5000/api/users/${user._id}/password`, {
-            method: 'PATCH',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(passwordData)
-          });
+          const response = await patch(`/api/users/${user._id}/password`, passwordData);
 
           const data = await response.json();
           if (!response.ok || !data.success) {
@@ -469,14 +448,7 @@ function DashboardPage({ user, onLogout, onGoToMainPage }) {
           }
         }}
         onDeleteUser={async () => {
-          const token = localStorage.getItem('token');
-          const response = await fetch(`http://localhost:5000/api/users/${user._id}`, {
-            method: 'DELETE',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            }
-          });
+          const response = await del(`/api/users/${user._id}`);
 
           const data = await response.json();
           if (!response.ok || !data.success) {

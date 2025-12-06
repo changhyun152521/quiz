@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { get } from '../utils/api';
 import './TestResultModal.css';
 
 function TestResultModal({ showModal, onClose, course }) {
@@ -25,13 +26,7 @@ function TestResultModal({ showModal, onClose, course }) {
       // 과제 ID 추출
       const assignmentId = selectedAssignment._id || selectedAssignment;
       
-      const response = await fetch(`http://localhost:5000/api/assignments/${assignmentId}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const response = await get(`/api/assignments/${assignmentId}`);
 
       const data = await response.json();
       if (data.success && data.data) {

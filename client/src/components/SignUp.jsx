@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { post } from '../utils/api';
 import './SignUp.css';
 import TermsModal from './TermsModal';
 
@@ -162,13 +163,7 @@ function SignUp({ showModal, onClose, onShowLogin }) {
         confirmPassword: undefined // 서버로 보내지 않음
       };
 
-      const response = await fetch('http://localhost:5000/api/users', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(submitData)
-      });
+      const response = await post('/api/users', submitData);
 
       const data = await response.json();
 

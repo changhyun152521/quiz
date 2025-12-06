@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { get, post } from '../utils/api';
 import './Login.css';
 
 function Login({ showModal, onClose, onShowSignUp, onLoginSuccess }) {
@@ -26,12 +27,7 @@ function Login({ showModal, onClose, onShowSignUp, onLoginSuccess }) {
 
       if (token && userData) {
         // 토큰 유효성 검증
-        fetch('http://localhost:5000/api/auth/verify', {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        })
+        get('/api/auth/verify')
           .then(res => res.json())
           .then(data => {
             if (data.success) {
@@ -108,16 +104,10 @@ function Login({ showModal, onClose, onShowSignUp, onLoginSuccess }) {
     try {
       console.log('로그인 시도:', { userId: formData.userId, passwordLength: formData.password.length });
       
-      const response = await fetch('http://localhost:5000/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          userId: formData.userId,
-          password: formData.password,
-          rememberMe: formData.rememberMe
-        })
+      const response = await post('/api/auth/login', {
+        userId: formData.userId,
+        password: formData.password,
+        rememberMe: formData.rememberMe
       });
 
       console.log('서버 응답 상태:', response.status, response.statusText);
@@ -171,13 +161,7 @@ function Login({ showModal, onClose, onShowSignUp, onLoginSuccess }) {
     }
 
     try {
-      const response = await fetch('http://localhost:5000/api/auth/find-userid', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(findUserIdData)
-      });
+      const response = await post('/api/auth/find-userid', findUserIdData);
 
       const data = await response.json();
 

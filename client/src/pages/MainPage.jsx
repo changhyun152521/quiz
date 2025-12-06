@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { get } from '../utils/api'
 import SignUp from '../components/SignUp'
 import Login from '../components/Login'
 import '../App.css'
@@ -31,12 +32,7 @@ function MainPage({ onLoginSuccess, onBackToDashboard }) {
       if (token && userData) {
         try {
           // 토큰 유효성 검증
-          const response = await fetch('http://localhost:5000/api/auth/verify', {
-            method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${token}`
-            }
-          })
+          const response = await get('/api/auth/verify')
           
           const data = await response.json()
           if (data.success) {
@@ -186,12 +182,7 @@ function MainPage({ onLoginSuccess, onBackToDashboard }) {
                 if (token && userData) {
                   try {
                     // 토큰 유효성 검증
-                    const response = await fetch('http://localhost:5000/api/auth/verify', {
-                      method: 'GET',
-                      headers: {
-                        'Authorization': `Bearer ${token}`
-                      }
-                    })
+                    const response = await get('/api/auth/verify')
                     
                     const data = await response.json()
                     if (data.success) {

@@ -70,12 +70,24 @@ export const del = async (endpoint, options = {}) => {
   return apiRequest(endpoint, { ...options, method: 'DELETE' });
 };
 
+/**
+ * PATCH 요청
+ */
+export const patch = async (endpoint, data, options = {}) => {
+  return apiRequest(endpoint, {
+    ...options,
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+};
+
 export default {
   API_URL,
   apiRequest,
   get,
   post,
   put,
+  patch,
   delete: del,
 };
 
