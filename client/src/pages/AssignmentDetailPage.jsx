@@ -3,6 +3,8 @@ import { post } from '../utils/api';
 import '../components/AssignmentDetail.css';
 
 function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) {
+  // 학생 ID 가져오기
+  const studentId = user?._id || user?.id || null;
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isDrawing, setIsDrawing] = useState(false);
   const [penColor, setPenColor] = useState('#000000');
@@ -65,8 +67,8 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
       setZoom(1);
       setPanOffset({ x: 0, y: 0 });
       // 첫 이미지의 변경사항 여부 확인 (24시간 이내인 경우만)
-      if (assignment && assignment._id) {
-        const submittedAtKey = `assignment_${assignment._id}_submittedAt`;
+      if (assignment && assignment._id && studentId) {
+        const submittedAtKey = `assignment_${assignment._id}_student_${studentId}_submittedAt`;
         const submittedAtStr = localStorage.getItem(submittedAtKey);
         
         let shouldCheckData = true;
@@ -80,9 +82,9 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
               shouldCheckData = false;
               // 만료된 데이터 삭제
               for (let i = 0; i < 100; i++) {
-                localStorage.removeItem(`assignment_${assignment._id}_image_${i}`);
+                localStorage.removeItem(`assignment_${assignment._id}_student_${studentId}_image_${i}`);
               }
-              localStorage.removeItem(`assignment_${assignment._id}_image_empty`);
+              localStorage.removeItem(`assignment_${assignment._id}_student_${studentId}_image_empty`);
               localStorage.removeItem(submittedAtKey);
             }
           } catch (error) {
@@ -90,8 +92,9 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
           }
         }
         
-        if (shouldCheckData) {
-          const savedData = localStorage.getItem(`assignment_${assignment._id}_image_0`);
+        if (shouldCheckData && studentId) {
+          const savedData = localStorage.getItem(`assignment_${assignment._id}_student_${studentId}_image_0`) ||
+                           localStorage.getItem(`assignment_${assignment._id}_student_${studentId}_image_empty`);
           setHasChanges(!!savedData);
         } else {
           setHasChanges(false);
@@ -108,9 +111,9 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
 
   // 만료된 캔버스 데이터 삭제 함수 (24시간 경과)
   const cleanupExpiredCanvasData = (assignmentId) => {
-    if (!assignmentId) return;
+    if (!assignmentId || !studentId) return;
     
-    const submittedAtKey = `assignment_${assignmentId}_submittedAt`;
+    const submittedAtKey = `assignment_${assignmentId}_student_${studentId}_submittedAt`;
     const submittedAtStr = localStorage.getItem(submittedAtKey);
     
     if (!submittedAtStr) return; // 제출 기록이 없으면 삭제하지 않음
@@ -124,10 +127,10 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
       if (hoursSinceSubmission >= 24) {
         // 모든 이미지 인덱스에 대한 캔버스 데이터 삭제
         for (let i = 0; i < 100; i++) { // 최대 100개 이미지까지 체크
-          localStorage.removeItem(`assignment_${assignmentId}_image_${i}`);
+          localStorage.removeItem(`assignment_${assignmentId}_student_${studentId}_image_${i}`);
         }
         // 빈 캔버스 데이터도 삭제
-        localStorage.removeItem(`assignment_${assignmentId}_image_empty`);
+        localStorage.removeItem(`assignment_${assignmentId}_student_${studentId}_image_empty`);
         // 제출 시간 기록도 삭제
         localStorage.removeItem(submittedAtKey);
         console.log(`과제 ${assignmentId}의 만료된 캔버스 데이터가 삭제되었습니다.`);
@@ -157,9 +160,11 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
         });
         
         // 제출 시간을 localStorage에 저장 (없는 경우에만)
-        const submittedAtKey = `assignment_${assignment._id}_submittedAt`;
-        if (!localStorage.getItem(submittedAtKey) && submission.submittedAt) {
-          localStorage.setItem(submittedAtKey, new Date(submission.submittedAt).toISOString());
+        if (studentId) {
+          const submittedAtKey = `assignment_${assignment._id}_student_${studentId}_submittedAt`;
+          if (!localStorage.getItem(submittedAtKey) && submission.submittedAt) {
+            localStorage.setItem(submittedAtKey, new Date(submission.submittedAt).toISOString());
+          }
         }
         
         // 만료된 캔버스 데이터 정리
@@ -325,8 +330,8 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
         drawingCanvas.style.padding = '0';
 
         // 저장된 그리기 데이터 복원 (24시간 이내인 경우만)
-        if (assignment && assignment._id) {
-          const submittedAtKey = `assignment_${assignment._id}_submittedAt`;
+        if (assignment && assignment._id && studentId) {
+          const submittedAtKey = `assignment_${assignment._id}_student_${studentId}_submittedAt`;
           const submittedAtStr = localStorage.getItem(submittedAtKey);
           
           let shouldLoadData = true;
@@ -339,7 +344,7 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
               // 24시간이 지났으면 데이터를 로드하지 않고 삭제
               if (hoursSinceSubmission >= 24) {
                 shouldLoadData = false;
-                localStorage.removeItem(`assignment_${assignment._id}_image_empty`);
+                localStorage.removeItem(`assignment_${assignment._id}_student_${studentId}_image_empty`);
                 localStorage.removeItem(submittedAtKey);
                 console.log(`과제 ${assignment._id}의 만료된 캔버스 데이터가 삭제되었습니다.`);
               }
@@ -349,7 +354,7 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
           }
           
           if (shouldLoadData) {
-            const savedData = localStorage.getItem(`assignment_${assignment._id}_image_empty`);
+            const savedData = localStorage.getItem(`assignment_${assignment._id}_student_${studentId}_image_empty`);
             if (savedData) {
               try {
                 const image = new Image();
@@ -464,54 +469,56 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
         drawingCtx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
 
         // 저장된 그리기 복원 (24시간 이내인 경우만)
-        const submittedAtKey = `assignment_${assignment._id}_submittedAt`;
-        const submittedAtStr = localStorage.getItem(submittedAtKey);
-        
-        let shouldLoadData = true;
-        if (submittedAtStr) {
-          try {
-            const submittedAt = new Date(submittedAtStr);
-            const now = new Date();
-            const hoursSinceSubmission = (now - submittedAt) / (1000 * 60 * 60);
-            
-            // 24시간이 지났으면 데이터를 로드하지 않고 삭제
-            if (hoursSinceSubmission >= 24) {
-              shouldLoadData = false;
-              // 모든 이미지 인덱스에 대한 캔버스 데이터 삭제
-              for (let i = 0; i < 100; i++) {
-                localStorage.removeItem(`assignment_${assignment._id}_image_${i}`);
+        if (studentId) {
+          const submittedAtKey = `assignment_${assignment._id}_student_${studentId}_submittedAt`;
+          const submittedAtStr = localStorage.getItem(submittedAtKey);
+          
+          let shouldLoadData = true;
+          if (submittedAtStr) {
+            try {
+              const submittedAt = new Date(submittedAtStr);
+              const now = new Date();
+              const hoursSinceSubmission = (now - submittedAt) / (1000 * 60 * 60);
+              
+              // 24시간이 지났으면 데이터를 로드하지 않고 삭제
+              if (hoursSinceSubmission >= 24) {
+                shouldLoadData = false;
+                // 모든 이미지 인덱스에 대한 캔버스 데이터 삭제
+                for (let i = 0; i < 100; i++) {
+                  localStorage.removeItem(`assignment_${assignment._id}_student_${studentId}_image_${i}`);
+                }
+                localStorage.removeItem(`assignment_${assignment._id}_student_${studentId}_image_empty`);
+                localStorage.removeItem(submittedAtKey);
+                console.log(`과제 ${assignment._id}의 만료된 캔버스 데이터가 삭제되었습니다.`);
               }
-              localStorage.removeItem(`assignment_${assignment._id}_image_empty`);
-              localStorage.removeItem(submittedAtKey);
-              console.log(`과제 ${assignment._id}의 만료된 캔버스 데이터가 삭제되었습니다.`);
+            } catch (error) {
+              console.error('제출 시간 확인 중 오류:', error);
             }
-          } catch (error) {
-            console.error('제출 시간 확인 중 오류:', error);
           }
-        }
-        
-        if (shouldLoadData) {
-          const savedData = localStorage.getItem(`assignment_${assignment._id}_image_${currentImageIndex}`);
-          if (savedData) {
-            const savedImg = new Image();
-            savedImg.onload = () => {
-              drawingCtx.drawImage(savedImg, 0, 0, drawingCanvas.width, drawingCanvas.height);
+          
+          if (shouldLoadData) {
+            const savedData = localStorage.getItem(`assignment_${assignment._id}_student_${studentId}_image_${currentImageIndex}`);
+            if (savedData) {
+              const savedImg = new Image();
+              savedImg.onload = () => {
+                drawingCtx.drawImage(savedImg, 0, 0, drawingCanvas.width, drawingCanvas.height);
+                setImageLoaded(true);
+                setHasChanges(true); // 저장된 그리기가 있으면 변경사항 있음
+              };
+              savedImg.onerror = () => {
+                console.error('저장된 그리기 로드 실패');
+                setImageLoaded(true);
+                setHasChanges(false);
+              };
+              savedImg.src = savedData;
+            } else {
               setImageLoaded(true);
-              setHasChanges(true); // 저장된 그리기가 있으면 변경사항 있음
-            };
-            savedImg.onerror = () => {
-              console.error('저장된 그리기 로드 실패');
-              setImageLoaded(true);
-              setHasChanges(false);
-            };
-            savedImg.src = savedData;
+              setHasChanges(false); // 저장된 그리기가 없으면 변경사항 없음
+            }
           } else {
             setImageLoaded(true);
-            setHasChanges(false); // 저장된 그리기가 없으면 변경사항 없음
+            setHasChanges(false); // 만료되어 삭제된 경우
           }
-        } else {
-          setImageLoaded(true);
-          setHasChanges(false); // 만료되어 삭제된 경우
         }
       }, 100);
     };
@@ -561,35 +568,37 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
       setZoom(1);
       setPanOffset({ x: 0, y: 0 });
       // 다음 이미지의 변경사항 여부 확인 (24시간 이내인 경우만)
-      const submittedAtKey = `assignment_${assignment._id}_submittedAt`;
-      const submittedAtStr = localStorage.getItem(submittedAtKey);
-      
-      let shouldCheckData = true;
-      if (submittedAtStr) {
-        try {
-          const submittedAt = new Date(submittedAtStr);
-          const now = new Date();
-          const hoursSinceSubmission = (now - submittedAt) / (1000 * 60 * 60);
-          
-          if (hoursSinceSubmission >= 24) {
-            shouldCheckData = false;
-            // 만료된 데이터 삭제
-            for (let i = 0; i < 100; i++) {
-              localStorage.removeItem(`assignment_${assignment._id}_image_${i}`);
+      if (studentId) {
+        const submittedAtKey = `assignment_${assignment._id}_student_${studentId}_submittedAt`;
+        const submittedAtStr = localStorage.getItem(submittedAtKey);
+        
+        let shouldCheckData = true;
+        if (submittedAtStr) {
+          try {
+            const submittedAt = new Date(submittedAtStr);
+            const now = new Date();
+            const hoursSinceSubmission = (now - submittedAt) / (1000 * 60 * 60);
+            
+            if (hoursSinceSubmission >= 24) {
+              shouldCheckData = false;
+              // 만료된 데이터 삭제
+              for (let i = 0; i < 100; i++) {
+                localStorage.removeItem(`assignment_${assignment._id}_student_${studentId}_image_${i}`);
+              }
+              localStorage.removeItem(`assignment_${assignment._id}_student_${studentId}_image_empty`);
+              localStorage.removeItem(submittedAtKey);
             }
-            localStorage.removeItem(`assignment_${assignment._id}_image_empty`);
-            localStorage.removeItem(submittedAtKey);
+          } catch (error) {
+            console.error('제출 시간 확인 중 오류:', error);
           }
-        } catch (error) {
-          console.error('제출 시간 확인 중 오류:', error);
         }
-      }
-      
-      if (shouldCheckData) {
-        const savedData = localStorage.getItem(`assignment_${assignment._id}_image_${currentImageIndex - 1}`);
-        setHasChanges(!!savedData);
-      } else {
-        setHasChanges(false);
+        
+        if (shouldCheckData) {
+          const savedData = localStorage.getItem(`assignment_${assignment._id}_student_${studentId}_image_${currentImageIndex - 1}`);
+          setHasChanges(!!savedData);
+        } else {
+          setHasChanges(false);
+        }
       }
     }
   };
@@ -602,35 +611,37 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
       setZoom(1);
       setPanOffset({ x: 0, y: 0 });
       // 다음 이미지의 변경사항 여부 확인 (24시간 이내인 경우만)
-      const submittedAtKey = `assignment_${assignment._id}_submittedAt`;
-      const submittedAtStr = localStorage.getItem(submittedAtKey);
-      
-      let shouldCheckData = true;
-      if (submittedAtStr) {
-        try {
-          const submittedAt = new Date(submittedAtStr);
-          const now = new Date();
-          const hoursSinceSubmission = (now - submittedAt) / (1000 * 60 * 60);
-          
-          if (hoursSinceSubmission >= 24) {
-            shouldCheckData = false;
-            // 만료된 데이터 삭제
-            for (let i = 0; i < 100; i++) {
-              localStorage.removeItem(`assignment_${assignment._id}_image_${i}`);
+      if (studentId) {
+        const submittedAtKey = `assignment_${assignment._id}_student_${studentId}_submittedAt`;
+        const submittedAtStr = localStorage.getItem(submittedAtKey);
+        
+        let shouldCheckData = true;
+        if (submittedAtStr) {
+          try {
+            const submittedAt = new Date(submittedAtStr);
+            const now = new Date();
+            const hoursSinceSubmission = (now - submittedAt) / (1000 * 60 * 60);
+            
+            if (hoursSinceSubmission >= 24) {
+              shouldCheckData = false;
+              // 만료된 데이터 삭제
+              for (let i = 0; i < 100; i++) {
+                localStorage.removeItem(`assignment_${assignment._id}_student_${studentId}_image_${i}`);
+              }
+              localStorage.removeItem(`assignment_${assignment._id}_student_${studentId}_image_empty`);
+              localStorage.removeItem(submittedAtKey);
             }
-            localStorage.removeItem(`assignment_${assignment._id}_image_empty`);
-            localStorage.removeItem(submittedAtKey);
+          } catch (error) {
+            console.error('제출 시간 확인 중 오류:', error);
           }
-        } catch (error) {
-          console.error('제출 시간 확인 중 오류:', error);
         }
-      }
-      
-      if (shouldCheckData) {
-        const savedData = localStorage.getItem(`assignment_${assignment._id}_image_${currentImageIndex + 1}`);
-        setHasChanges(!!savedData);
-      } else {
-        setHasChanges(false);
+        
+        if (shouldCheckData) {
+          const savedData = localStorage.getItem(`assignment_${assignment._id}_student_${studentId}_image_${currentImageIndex + 1}`);
+          setHasChanges(!!savedData);
+        } else {
+          setHasChanges(false);
+        }
       }
     }
   };
@@ -638,9 +649,14 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
   // 그리기 저장
   const saveDrawing = () => {
     const drawingCanvas = drawingCanvasRef.current;
-    if (drawingCanvas) {
+    if (drawingCanvas && studentId) {
       const dataURL = drawingCanvas.toDataURL();
-      localStorage.setItem(`assignment_${assignment._id}_image_${currentImageIndex}`, dataURL);
+      // 이미지가 없는 경우 빈 캔버스로 저장
+      if (images.length === 0) {
+        localStorage.setItem(`assignment_${assignment._id}_student_${studentId}_image_empty`, dataURL);
+      } else {
+        localStorage.setItem(`assignment_${assignment._id}_student_${studentId}_image_${currentImageIndex}`, dataURL);
+      }
     }
   };
 
@@ -688,11 +704,11 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
     if (!hasChanges) return;
     
     const drawingCanvas = drawingCanvasRef.current;
-    if (drawingCanvas) {
+    if (drawingCanvas && studentId) {
       const ctx = drawingCanvas.getContext('2d');
       ctx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
       // 저장된 그리기 데이터 삭제
-      localStorage.removeItem(`assignment_${assignment._id}_image_${currentImageIndex}`);
+      localStorage.removeItem(`assignment_${assignment._id}_student_${studentId}_image_${currentImageIndex}`);
       setHasChanges(false);
     }
   };
@@ -914,10 +930,10 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
   // 전체 지우기
   const handleClear = () => {
     const drawingCanvas = drawingCanvasRef.current;
-    if (drawingCanvas) {
+    if (drawingCanvas && studentId) {
       const ctx = drawingCanvas.getContext('2d');
       ctx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
-      localStorage.removeItem(`assignment_${assignment._id}_image_${currentImageIndex}`);
+      localStorage.removeItem(`assignment_${assignment._id}_student_${studentId}_image_${currentImageIndex}`);
       setHasChanges(false);
     }
   };
@@ -1018,8 +1034,10 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
         }
         
         // 제출 시간을 localStorage에 저장 (24시간 후 자동 삭제를 위해)
-        const submittedAtKey = `assignment_${assignment._id}_submittedAt`;
-        localStorage.setItem(submittedAtKey, submittedAt.toISOString());
+        if (studentId) {
+          const submittedAtKey = `assignment_${assignment._id}_student_${studentId}_submittedAt`;
+          localStorage.setItem(submittedAtKey, submittedAt.toISOString());
+        }
         
         // assignment 업데이트 콜백 호출
         if (onAssignmentUpdate) {

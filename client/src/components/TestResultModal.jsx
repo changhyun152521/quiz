@@ -90,13 +90,12 @@ function TestResultModal({ showModal, onClose, course, allAssignments = [] }) {
       }
     }
     
-    // localStorage에서 학생 풀이 찾기
-    // 현재는 학생별로 구분되지 않으므로, 과제의 모든 필기 데이터를 확인
+    // localStorage에서 학생 풀이 찾기 (학생 ID 포함)
     // 원본 이미지가 있는 경우
     if (originalImages.length > 0) {
       for (let i = 0; i < originalImages.length; i++) {
-        // 현재 저장 방식: assignment_${assignmentId}_image_${i}
-        const drawingKey = `assignment_${assignmentId}_image_${i}`;
+        // 학생별로 구분된 저장 방식: assignment_${assignmentId}_student_${studentId}_image_${i}
+        const drawingKey = `assignment_${assignmentId}_student_${studentId}_image_${i}`;
         const drawingData = localStorage.getItem(drawingKey);
         solutionData.push({
           index: i,
@@ -107,7 +106,7 @@ function TestResultModal({ showModal, onClose, course, allAssignments = [] }) {
     }
     
     // 빈 캔버스 데이터 확인 (이미지가 없거나 빈 캔버스에 필기한 경우)
-    const emptyKey = `assignment_${assignmentId}_image_empty`;
+    const emptyKey = `assignment_${assignmentId}_student_${studentId}_image_empty`;
     const emptyData = localStorage.getItem(emptyKey);
     if (emptyData) {
       solutionData.push({
