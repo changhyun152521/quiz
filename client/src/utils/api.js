@@ -8,7 +8,28 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
  * @returns {Promise<Response>}
  */
 export const apiRequest = async (endpoint, options = {}) => {
-  const url = endpoint.startsWith('http') ? endpoint : `${API_URL}${endpoint}`;
+  // API_URL에서 마지막 슬래시 제거
+  const baseUrl = API_URL.replace(/\/$/, '');
+  
+  // endpoint가 이미 /api로 시작하는지 확인
+  // API_URL에 /api가 포함되어 있을 수 있으므로 중복 방지
+  let url;
+  if (endpoint.startsWith('http')) {
+    // 전체 URL인 경우 그대로 사용
+    url = endpoint;
+  } else if (endpoint.startsWith('/api')) {
+    // endpoint가 /api로 시작하면, baseUrl에 /api가 있는지 확인
+    if (baseUrl.endsWith('/api')) {
+      // baseUrl이 /api로 끝나면 endpoint의 /api 제거
+      url = `${baseUrl}${endpoint.substring(4)}`;
+    } else {
+      // baseUrl에 /api가 없으면 그대로 연결
+      url = `${baseUrl}${endpoint}`;
+    }
+  } else {
+    // endpoint가 /api로 시작하지 않으면 그대로 연결
+    url = `${baseUrl}${endpoint}`;
+  }
   
   const defaultOptions = {
     headers: {
