@@ -1,0 +1,81 @@
+// API 기본 URL 설정
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
+/**
+ * API 요청 헬퍼 함수
+ * @param {string} endpoint - API 엔드포인트 (예: '/api/auth/login')
+ * @param {object} options - fetch 옵션
+ * @returns {Promise<Response>}
+ */
+export const apiRequest = async (endpoint, options = {}) => {
+  const url = endpoint.startsWith('http') ? endpoint : `${API_URL}${endpoint}`;
+  
+  const defaultOptions = {
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  };
+
+  // 토큰이 있으면 Authorization 헤더 추가
+  const token = localStorage.getItem('token');
+  if (token) {
+    defaultOptions.headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const mergedOptions = {
+    ...defaultOptions,
+    ...options,
+    headers: {
+      ...defaultOptions.headers,
+      ...options.headers,
+    },
+  };
+
+  return fetch(url, mergedOptions);
+};
+
+/**
+ * GET 요청
+ */
+export const get = async (endpoint, options = {}) => {
+  return apiRequest(endpoint, { ...options, method: 'GET' });
+};
+
+/**
+ * POST 요청
+ */
+export const post = async (endpoint, data, options = {}) => {
+  return apiRequest(endpoint, {
+    ...options,
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+};
+
+/**
+ * PUT 요청
+ */
+export const put = async (endpoint, data, options = {}) => {
+  return apiRequest(endpoint, {
+    ...options,
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+};
+
+/**
+ * DELETE 요청
+ */
+export const del = async (endpoint, options = {}) => {
+  return apiRequest(endpoint, { ...options, method: 'DELETE' });
+};
+
+export default {
+  API_URL,
+  apiRequest,
+  get,
+  post,
+  put,
+  delete: del,
+};
+

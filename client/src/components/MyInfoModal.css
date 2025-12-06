@@ -1,0 +1,363 @@
+.myinfo-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  animation: fadeIn 0.2s ease;
+}
+
+.myinfo-modal-content {
+  background: #ffffff;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 600px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  animation: slideUp 0.3s ease;
+}
+
+.myinfo-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px 32px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.myinfo-modal-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 0;
+  font-family: 'Pretendard', sans-serif;
+}
+
+.myinfo-modal-close {
+  background: none;
+  border: none;
+  font-size: 32px;
+  color: #666;
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s ease;
+}
+
+.myinfo-modal-close:hover {
+  color: #1a1a1a;
+}
+
+.myinfo-modal-body {
+  padding: 32px;
+}
+
+/* 정보 섹션 */
+.info-section {
+  margin-bottom: 32px;
+}
+
+.info-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.info-section-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0;
+  font-family: 'Pretendard', sans-serif;
+}
+
+.btn-edit {
+  padding: 8px 16px;
+  background: #1a1a1a;
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: 'Pretendard', sans-serif;
+}
+
+.btn-edit:hover {
+  background: #333;
+}
+
+/* 정보 조회 뷰 */
+.info-view {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.info-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.info-item:last-child {
+  border-bottom: none;
+}
+
+.info-label {
+  min-width: 120px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #666;
+  font-family: 'Pretendard', sans-serif;
+}
+
+.info-value {
+  flex: 1;
+  font-size: 14px;
+  color: #1a1a1a;
+  font-family: 'Pretendard', sans-serif;
+}
+
+.myinfo-form {
+  margin-top: 20px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+  font-family: 'Pretendard', sans-serif;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: 'Pretendard', sans-serif;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #1a1a1a;
+  box-shadow: 0 0 0 3px rgba(26, 26, 26, 0.1);
+}
+
+.form-group input.error {
+  border-color: #dc2626;
+}
+
+.error-message {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: #dc2626;
+  font-family: 'Pretendard', sans-serif;
+}
+
+.myinfo-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.btn-cancel,
+.btn-submit {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: 'Pretendard', sans-serif;
+}
+
+.btn-cancel {
+  background: #f5f5f5;
+  color: #666;
+}
+
+.btn-cancel:hover {
+  background: #e8e8e8;
+}
+
+.btn-submit {
+  background: #1a1a1a;
+  color: #ffffff;
+}
+
+.btn-submit:hover:not(:disabled) {
+  background: #333;
+}
+
+.btn-submit:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+/* 비밀번호 변경 섹션 */
+.password-section {
+  border-top: 2px solid #e0e0e0;
+  padding-top: 24px;
+  margin-top: 24px;
+}
+
+.password-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.password-section-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0;
+  font-family: 'Pretendard', sans-serif;
+}
+
+.btn-toggle-password {
+  padding: 8px 16px;
+  background: #f5f5f5;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: 'Pretendard', sans-serif;
+}
+
+.btn-toggle-password:hover {
+  background: #e8e8e8;
+}
+
+.password-form {
+  margin-top: 20px;
+}
+
+.password-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
+/* 회원탈퇴 섹션 */
+.delete-section {
+  border-top: 2px solid #fee2e2;
+  padding-top: 24px;
+  margin-top: 32px;
+}
+
+.delete-section-header {
+  margin-bottom: 16px;
+}
+
+.delete-section-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #dc2626;
+  margin: 0;
+  font-family: 'Pretendard', sans-serif;
+}
+
+.delete-section-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.delete-warning {
+  font-size: 14px;
+  color: #dc2626;
+  margin: 0;
+  font-family: 'Pretendard', sans-serif;
+  line-height: 1.5;
+}
+
+.btn-delete {
+  padding: 12px 24px;
+  background: #fee2e2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: 'Pretendard', sans-serif;
+  align-self: flex-start;
+}
+
+.btn-delete:hover:not(:disabled) {
+  background: #fecaca;
+  border-color: #fca5a5;
+}
+
+.btn-delete:disabled {
+  background: #f9fafb;
+  color: #d1d5db;
+  border-color: #e5e7eb;
+  cursor: not-allowed;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@media (max-width: 768px) {
+  .myinfo-modal-content {
+    width: 95%;
+    max-height: 95vh;
+  }
+
+  .myinfo-modal-header {
+    padding: 20px 24px;
+  }
+
+  .myinfo-modal-body {
+    padding: 24px;
+  }
+
+  .password-section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+}
+

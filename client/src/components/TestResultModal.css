@@ -1,0 +1,235 @@
+.test-result-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: 20px;
+}
+
+.test-result-modal-content {
+  background: #ffffff;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 900px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+}
+
+.test-result-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px 32px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.test-result-modal-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 0;
+  font-family: 'GongGothic', sans-serif;
+}
+
+.test-result-modal-close {
+  background: none;
+  border: none;
+  font-size: 32px;
+  color: #999;
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s ease;
+  border-radius: 4px;
+}
+
+.test-result-modal-close:hover {
+  background: #f0f0f0;
+  color: #333;
+}
+
+.test-result-modal-body {
+  padding: 32px;
+  flex: 1;
+}
+
+.test-result-course-info {
+  margin-bottom: 24px;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+}
+
+.test-result-course-info h3 {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 0 0 8px 0;
+  font-family: 'GongGothic', sans-serif;
+}
+
+.test-result-course-info p {
+  font-size: 14px;
+  color: #666;
+  margin: 0;
+  font-family: 'Pretendard', sans-serif;
+}
+
+.test-result-assignment-select {
+  margin-bottom: 24px;
+}
+
+.test-result-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 8px;
+  font-family: 'Pretendard', sans-serif;
+}
+
+.test-result-select {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: 'Pretendard', sans-serif;
+  background: #ffffff;
+  color: #1a1a1a;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.test-result-select:focus {
+  outline: none;
+  border-color: #1a1a1a;
+  box-shadow: 0 0 0 3px rgba(26, 26, 26, 0.1);
+}
+
+.test-result-table-container {
+  margin-top: 24px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.test-result-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.test-result-table thead {
+  background: #f8f9fa;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.test-result-table th {
+  padding: 12px 16px;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 600;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-family: 'Pretendard', sans-serif;
+}
+
+.test-result-table td {
+  padding: 16px;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 14px;
+  color: #333;
+  font-family: 'Pretendard', sans-serif;
+}
+
+.test-result-table tbody tr:hover {
+  background: #fafafa;
+}
+
+.test-result-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.test-result-status {
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: 'Pretendard', sans-serif;
+  white-space: nowrap;
+}
+
+.test-result-status.submitted {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.test-result-status.not-submitted {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.test-result-score {
+  font-size: 14px;
+  font-weight: 600;
+  color: #059669;
+  font-family: 'Pretendard', sans-serif;
+}
+
+.test-result-no-score {
+  color: #999;
+}
+
+.test-result-empty {
+  text-align: center;
+  color: #999;
+  padding: 40px 20px !important;
+  font-size: 14px;
+}
+
+.test-result-loading {
+  text-align: center;
+  padding: 40px 20px;
+  color: #666;
+  font-size: 14px;
+}
+
+@media (max-width: 768px) {
+  .test-result-modal-content {
+    width: 95%;
+    max-height: 95vh;
+  }
+
+  .test-result-modal-header {
+    padding: 20px;
+  }
+
+  .test-result-modal-body {
+    padding: 20px;
+  }
+
+  .test-result-table {
+    font-size: 12px;
+  }
+
+  .test-result-table th,
+  .test-result-table td {
+    padding: 10px 8px;
+  }
+}
+
