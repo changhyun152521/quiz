@@ -442,6 +442,19 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
       return;
     }
 
+    // 이미지가 없을 때 확인 메시지 표시
+    const hasFiles = formData.fileUrl && formData.fileUrl.length > 0;
+    if (!hasFiles) {
+      const confirmMessage = mode === 'edit' 
+        ? '이미지가 업로드되어 있지 않습니다. 이미지 없이 과제를 수정하시겠습니까?'
+        : '이미지가 업로드되어 있지 않습니다. 이미지 없이 과제를 등록하시겠습니까?';
+      
+      const userConfirmed = window.confirm(confirmMessage);
+      if (!userConfirmed) {
+        return; // 사용자가 취소하면 등록 중단
+      }
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -528,7 +541,7 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
                 className={errors.assignmentType ? 'error' : ''}
               >
                 <option value="QUIZ">QUIZ</option>
-                <option value="실전TEST">실전TEST</option>
+                <option value="클리닉">클리닉</option>
               </select>
               {errors.assignmentType && <span className="error-message">{errors.assignmentType}</span>}
             </div>

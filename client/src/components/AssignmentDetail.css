@@ -29,20 +29,25 @@
 }
 
 .btn-back-header {
-  padding: 8px 12px;
-  background: transparent;
-  color: #1a1a1a;
+  background: none;
   border: none;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 28px;
+  color: #666;
   cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   transition: all 0.2s ease;
+  border-radius: 4px;
   font-family: 'Pretendard', sans-serif;
 }
 
 .btn-back-header:hover {
-  background: #f5f5f5;
+  background: #f0f0f0;
+  color: #1a1a1a;
 }
 
 .assignment-detail-title {
@@ -427,9 +432,10 @@
 
 .zoom-reset-btn {
   height: 28px;
-  padding: 0 12px;
+  width: 28px;
+  padding: 0;
   background: #f8f8f8;
-  color: #333;
+  color: #1a1a1a;
   border: 1px solid #e0e0e0;
   border-radius: 6px;
   font-size: 12px;
@@ -453,6 +459,24 @@
   color: #ccc;
   cursor: not-allowed;
   opacity: 0.5;
+}
+
+.zoom-reset-btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+.undo-btn {
+  min-width: 32px;
+  color: #1a1a1a;
+}
+
+.undo-btn:not(:disabled) svg {
+  stroke: #1a1a1a;
+}
+
+.undo-btn:disabled svg {
+  stroke: #ccc;
 }
 
 /* 지우기 버튼 - 굿노트 스타일 */
@@ -703,6 +727,29 @@
   flex-direction: column;
   align-items: flex-start;
   gap: 6px;
+  padding: 10px;
+  border-radius: 6px;
+  background: #ffffff;
+  border: 1px solid #e0e0e0;
+  transition: all 0.2s ease;
+}
+
+.answer-item.answer-correct {
+  background: #f0f9ff;
+  border-color: #4ade80;
+}
+
+.answer-item.answer-wrong {
+  background: #fef2f2;
+  border-color: #f87171;
+}
+
+.answer-item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-bottom: 4px;
 }
 
 .answer-label {
@@ -710,7 +757,52 @@
   font-weight: 600;
   color: #1a1a1a;
   font-family: 'Pretendard', sans-serif;
+}
+
+.answer-status {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-family: 'Pretendard', sans-serif;
+}
+
+.answer-status.status-correct {
+  color: #16a34a;
+  background: #dcfce7;
+}
+
+.answer-status.status-wrong {
+  color: #dc2626;
+  background: #fee2e2;
+}
+
+.answer-input-container {
   width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.correct-answer-display {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: #f8f9fa;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: 'Pretendard', sans-serif;
+}
+
+.correct-answer-label {
+  font-weight: 600;
+  color: #666;
+}
+
+.correct-answer-text {
+  color: #1a1a1a;
+  font-weight: 500;
 }
 
 .answer-input {

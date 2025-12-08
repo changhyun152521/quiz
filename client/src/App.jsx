@@ -68,19 +68,23 @@ function App() {
     setIsLoggedIn(true)
     setUser(userData)
     
-    // 먼저 강좌 선택 모달을 명시적으로 false로 설정
-    setShowCourseSelection(false)
-    
-    // 학습하기 버튼을 클릭했을 때만 강좌 선택 모달 표시
-    if (showCourseModal && userData && (userData.role === 'student' || !userData.role)) {
-      setShowCourseSelection(true)
-      setShowMainPage(true) // 메인페이지는 계속 표시
+    // 학생인 경우 로그인 성공 시 바로 강좌 선택 모달 표시
+    if (userData && (userData.role === 'student' || !userData.role)) {
+      if (showCourseModal) {
+        // 학습하기 버튼을 클릭했을 때 강좌 선택 모달 표시
+        setShowCourseSelection(true)
+        setShowMainPage(true) // 메인페이지는 계속 표시
+      } else {
+        // 로그인 성공 시 바로 강좌 선택 모달 표시 (메인페이지 숨김)
+        setShowCourseSelection(true)
+        setShowMainPage(false) // 메인페이지 숨김
+      }
     } else if (userData && (userData.role === 'admin' || userData.userId === 'admin' || userData.role === 'teacher')) {
       // 관리자나 강사는 바로 대시보드로
       setShowMainPage(false)
       setShowCourseSelection(false) // 명시적으로 false 설정
     } else {
-      // 학생이지만 강좌 선택 모달을 표시하지 않는 경우 (자동 로그인)
+      // 기타 경우
       setShowMainPage(true)
       setShowCourseSelection(false) // 명시적으로 false 설정
     }

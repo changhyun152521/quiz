@@ -105,9 +105,9 @@ function Login({ showModal, onClose, onShowSignUp, onLoginSuccess }) {
       console.log('로그인 시도:', { userId: formData.userId, passwordLength: formData.password.length });
       
       const response = await post('/api/auth/login', {
-        userId: formData.userId,
-        password: formData.password,
-        rememberMe: formData.rememberMe
+          userId: formData.userId,
+          password: formData.password,
+          rememberMe: formData.rememberMe
       });
 
       console.log('서버 응답 상태:', response.status, response.statusText);
@@ -144,7 +144,7 @@ function Login({ showModal, onClose, onShowSignUp, onLoginSuccess }) {
       // 학습하기 버튼을 통해 로그인한 경우 강좌 선택 모달 표시
       if (onLoginSuccess) {
         const user = data.data.user;
-        // 학생인 경우 강좌 선택 모달 표시
+        // 학생인 경우 로그인 성공 시 바로 강좌 선택 모달 표시
         const shouldShowCourseModal = (user.role === 'student' || !user.role);
         onLoginSuccess(user, shouldShowCourseModal);
       }

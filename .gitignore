@@ -50,3 +50,6 @@ dist-ssr/
 *.pem
 .cache/
 
+# Project Report
+PROJECT_REPORT.md
+

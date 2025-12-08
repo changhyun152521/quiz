@@ -75,57 +75,119 @@ function TestResultModal({ showModal, onClose, course, allAssignments = [] }) {
     if (!selectedAssignment) return;
     
     const assignmentId = selectedAssignment._id || selectedAssignment;
+    
+    // 전체 과제 정보 가져오기 (fileUrl, fileType 등 포함)
+    let assignment = selectedAssignment;
+    try {
+      const response = await get(`/api/assignments/${assignmentId}`);
+      const data = await response.json();
+      if (data.success && data.data) {
+        assignment = data.data;
+      }
+    } catch (error) {
+      console.error('과제 정보 가져오기 오류:', error);
+      // 에러가 나도 selectedAssignment 사용
+    }
+    
     const solutionData = [];
     
     // 원본 과제 이미지 가져오기
     const originalImages = [];
-    if (selectedAssignment.fileUrl && selectedAssignment.fileType) {
-      const fileUrls = Array.isArray(selectedAssignment.fileUrl) ? selectedAssignment.fileUrl : [];
-      const fileTypes = Array.isArray(selectedAssignment.fileType) ? selectedAssignment.fileType : [];
+    if (assignment.fileUrl && assignment.fileType) {
+      const fileUrls = Array.isArray(assignment.fileUrl) ? assignment.fileUrl : [];
+      const fileTypes = Array.isArray(assignment.fileType) ? assignment.fileType : [];
+      
+      console.log('[TestResultModal] 원본 이미지 확인:', {
+        fileUrls: fileUrls,
+        fileTypes: fileTypes,
+        fileUrlsLength: fileUrls.length,
+        fileTypesLength: fileTypes.length
+      });
       
       for (let i = 0; i < fileUrls.length; i++) {
-        if (fileTypes[i] === 'image') {
-          originalImages.push({ index: i, url: fileUrls[i] });
+        if (fileTypes[i] === 'image' && fileUrls[i]) {
+          // URL이 유효한지 확인
+          const url = fileUrls[i];
+          if (url && typeof url === 'string' && url.trim() !== '') {
+            originalImages.push({ index: i, url: url });
+          }
         }
       }
     }
     
-    // localStorage에서 학생 풀이 찾기 (학생 ID 포함)
-    // 원본 이미지가 있는 경우
+    console.log('[TestResultModal] 원본 이미지 배열:', {
+      originalImagesCount: originalImages.length,
+      originalImages: originalImages,
+      assignmentFileUrl: assignment.fileUrl,
+      assignmentFileType: assignment.fileType
+    });
+    
+    // assignment의 submissions에서 해당 학생의 solutionImages 가져오기
+    const submission = assignment.submissions?.find(sub => {
+      const subStudentId = sub.studentId?._id || sub.studentId;
+      return subStudentId && String(subStudentId) === String(studentId);
+    });
+    
+    const solutionImageUrls = Array.isArray(submission?.solutionImages) 
+      ? submission.solutionImages 
+      : [];
+    
+    console.log('[TestResultModal] 학생 풀이 이미지:', {
+      studentId: studentId,
+      studentName: studentName,
+      hasSubmission: !!submission,
+      solutionImageUrlsCount: solutionImageUrls.length,
+      solutionImageUrls: solutionImageUrls
+    });
+    
+    // Cloudinary에서 가져온 풀이 이미지와 원본 이미지 매칭
+    // 원본 이미지가 있으면 무조건 모든 원본 이미지를 표시 (풀이가 없어도)
     if (originalImages.length > 0) {
+      // 모든 원본 이미지를 solutionData에 추가
+      // 원본 이미지 개수만큼 반복하여 모든 페이지 표시
       for (let i = 0; i < originalImages.length; i++) {
-        // 학생별로 구분된 저장 방식: assignment_${assignmentId}_student_${studentId}_image_${i}
-        const drawingKey = `assignment_${assignmentId}_student_${studentId}_image_${i}`;
-        const drawingData = localStorage.getItem(drawingKey);
         solutionData.push({
           index: i,
           originalImage: originalImages[i].url,
-          drawing: drawingData || null
+          drawing: (i < solutionImageUrls.length && solutionImageUrls[i]) ? solutionImageUrls[i] : null // 풀이가 있으면 추가, 없으면 null
         });
       }
-    }
-    
-    // 빈 캔버스 데이터 확인 (이미지가 없거나 빈 캔버스에 필기한 경우)
-    const emptyKey = `assignment_${assignmentId}_student_${studentId}_image_empty`;
-    const emptyData = localStorage.getItem(emptyKey);
-    if (emptyData) {
+      console.log('[TestResultModal] 원본 이미지 기반 solutionData 생성:', {
+        solutionDataCount: solutionData.length,
+        originalImagesCount: originalImages.length,
+        solutionImageUrlsCount: solutionImageUrls.length,
+        solutionData: solutionData.map(s => ({
+          index: s.index,
+          hasOriginal: !!s.originalImage,
+          originalImageUrl: s.originalImage,
+          hasDrawing: !!s.drawing,
+          drawingUrl: s.drawing
+        }))
+      });
+    } else if (solutionImageUrls.length > 0) {
+      // 원본 이미지가 없지만 풀이가 있는 경우 (빈 캔버스)
       solutionData.push({
         index: -1,
-        originalImage: null, // 빈 캔버스
-        drawing: emptyData
+        originalImage: null,
+        drawing: solutionImageUrls[0] || null
       });
     }
     
-    // 원본 이미지가 있지만 필기가 없는 경우도 표시
-    if (originalImages.length > 0 && solutionData.length === 0) {
-      originalImages.forEach(img => {
-        solutionData.push({
-          index: img.index,
-          originalImage: img.url,
-          drawing: null
-        });
-      });
+    // 원본 이미지도 없고 풀이도 없으면 알림
+    // 원본 이미지가 있으면 풀이가 없어도 표시되므로 solutionData.length > 0이면 통과
+    if (solutionData.length === 0) {
+      alert(`${studentName} 학생의 풀이가 저장되어 있지 않습니다.`);
+      return;
     }
+    
+    // 원본 이미지가 있는 경우, 풀이가 없는 페이지도 포함하여 모든 페이지 표시
+    // 이미 solutionData에 원본 이미지와 풀이가 매칭되어 있으므로 그대로 사용
+    console.log('[TestResultModal] 최종 solutionData:', {
+      studentId: studentId,
+      studentName: studentName,
+      solutionDataCount: solutionData.length,
+      solutionData: solutionData
+    });
     
     if (solutionData.length === 0) {
       alert(`${studentName} 학생의 풀이가 저장되어 있지 않습니다.`);
@@ -210,6 +272,7 @@ function TestResultModal({ showModal, onClose, course, allAssignments = [] }) {
             drawingCanvas.style.height = `${displayHeight}px`;
             
             // 원본 이미지 그리기
+            // 캔버스를 투명하게 지우고 원본 이미지 그리기
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(img, 0, 0);
             
@@ -217,16 +280,21 @@ function TestResultModal({ showModal, onClose, course, allAssignments = [] }) {
             if (currentSolution.drawing) {
               const drawingImg = new Image();
               drawingImg.onload = () => {
+                // drawingCanvas를 투명하게 지우기
                 drawingCtx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
+                // 풀이 이미지를 그릴 때, 투명한 부분은 원본 이미지가 보이도록 설정
+                drawingCtx.globalCompositeOperation = 'source-over';
                 drawingCtx.drawImage(drawingImg, 0, 0);
                 setSolutionImageLoaded(true);
               };
               drawingImg.onerror = () => {
+                // 에러가 나도 drawingCanvas는 투명하게 유지
                 drawingCtx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
                 setSolutionImageLoaded(true);
               };
               drawingImg.src = currentSolution.drawing;
             } else {
+              // 풀이가 없으면 drawingCanvas를 투명하게 유지
               drawingCtx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
               setSolutionImageLoaded(true);
             }
@@ -583,7 +651,7 @@ function TestResultModal({ showModal, onClose, course, allAssignments = [] }) {
                                 <span className="assignment-subject">({assignment.subject})</span>
                               )}
                               {assignment.assignmentType && (
-                                <span className="assignment-type-badge">{assignment.assignmentType}</span>
+                                <span className="assignment-type-badge">{assignment.assignmentType === '실전TEST' ? '클리닉' : assignment.assignmentType}</span>
                               )}
                             </div>
                           </div>
@@ -686,7 +754,7 @@ function TestResultModal({ showModal, onClose, course, allAssignments = [] }) {
                             ) : (
                               <span className={`test-result-status not-submitted`}>
                                 미제출
-                              </span>
+                            </span>
                             )}
                           </td>
                           <td>

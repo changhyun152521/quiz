@@ -278,20 +278,20 @@ function CourseAssignmentModal({ showModal, onClose, course, allAssignments, onA
             <h3 className="section-title">등록된 과제</h3>
             {sortedRegisteredAssignments.length > 0 ? (
               <>
-                <div className="assignment-list">
+              <div className="assignment-list">
                   {paginatedAssignments.map((assignment) => (
-                    <div key={assignment._id || assignment} className="assignment-item">
-                      <div className="assignment-info">
+                  <div key={assignment._id || assignment} className="assignment-item">
+                    <div className="assignment-info">
                         <div className="assignment-main-info">
-                          <span className="assignment-name">
-                            {assignment.assignmentName || assignment}
-                          </span>
-                          {assignment.subject && (
-                            <span className="assignment-subject">({assignment.subject})</span>
-                          )}
-                          {assignment.assignmentType && (
-                            <span className="assignment-type">{assignment.assignmentType}</span>
-                          )}
+                      <span className="assignment-name">
+                        {assignment.assignmentName || assignment}
+                      </span>
+                      {assignment.subject && (
+                        <span className="assignment-subject">({assignment.subject})</span>
+                      )}
+                      {assignment.assignmentType && (
+                        <span className="assignment-type">{assignment.assignmentType === '실전TEST' ? '클리닉' : assignment.assignmentType}</span>
+                      )}
                         </div>
                         <div className="assignment-dates">
                           <span className="assignment-date-item">
@@ -307,20 +307,20 @@ function CourseAssignmentModal({ showModal, onClose, course, allAssignments, onA
                             <span className="date-value">{formatDate(assignment.dueDate)}</span>
                           </span>
                         </div>
-                      </div>
-                      <button
-                        className="remove-btn"
-                        onClick={() => onRemoveAssignment(
-                          course._id,
-                          assignment._id || assignment,
-                          assignment.assignmentName || '과제'
-                        )}
-                      >
-                        제거
-                      </button>
                     </div>
-                  ))}
-                </div>
+                    <button
+                      className="remove-btn"
+                      onClick={() => onRemoveAssignment(
+                        course._id,
+                        assignment._id || assignment,
+                        assignment.assignmentName || '과제'
+                      )}
+                    >
+                      제거
+                    </button>
+                  </div>
+                ))}
+              </div>
                 
                 {/* 페이지네이션 */}
                 {totalPages > 1 && (
@@ -361,7 +361,7 @@ function CourseAssignmentModal({ showModal, onClose, course, allAssignments, onA
           {/* 과제 추가 */}
           <div className="assignment-section">
             <div className="section-header">
-              <h3 className="section-title">과제 추가</h3>
+            <h3 className="section-title">과제 추가</h3>
               <button
                 className="create-assignment-btn"
                 onClick={() => setShowCreateForm(!showCreateForm)}
@@ -411,7 +411,7 @@ function CourseAssignmentModal({ showModal, onClose, course, allAssignments, onA
                       onChange={(e) => setCreateFormData({ ...createFormData, assignmentType: e.target.value })}
                     >
                       <option value="QUIZ">QUIZ</option>
-                      <option value="TEST">TEST</option>
+                      <option value="클리닉">클리닉</option>
                       <option value="HOMEWORK">HOMEWORK</option>
                     </select>
                   </div>
@@ -498,7 +498,7 @@ function CourseAssignmentModal({ showModal, onClose, course, allAssignments, onA
             {/* 기존 과제 선택 */}
             {!showCreateForm && (
               <>
-                {availableAssignments.length > 0 ? (
+            {availableAssignments.length > 0 ? (
                   <div className="add-assignment-section">
                     <h4 className="add-assignment-label">과제 선택</h4>
                     <div className="assignment-search-container">
@@ -522,7 +522,7 @@ function CourseAssignmentModal({ showModal, onClose, course, allAssignments, onA
                             >
                               <div className="assignment-card-header">
                                 <span className="assignment-card-name">{assignment.assignmentName}</span>
-                                <span className="assignment-card-type">{assignment.assignmentType}</span>
+                                <span className="assignment-card-type">{assignment.assignmentType === '실전TEST' ? '클리닉' : assignment.assignmentType}</span>
                               </div>
                               <div className="assignment-card-details">
                                 <span className="assignment-card-subject">과목: {assignment.subject}</span>
@@ -576,17 +576,17 @@ function CourseAssignmentModal({ showModal, onClose, course, allAssignments, onA
                       </div>
                     )}
                     <div className="add-assignment-actions">
-                      <button
-                        className="add-btn"
-                        onClick={handleAdd}
-                        disabled={!selectedAssignmentId}
-                      >
+                <button
+                  className="add-btn"
+                  onClick={handleAdd}
+                  disabled={!selectedAssignmentId}
+                >
                         선택한 과제 추가
-                      </button>
+                </button>
                     </div>
-                  </div>
-                ) : (
-                  <p className="empty-message">추가할 수 있는 과제가 없습니다.</p>
+              </div>
+            ) : (
+              <p className="empty-message">추가할 수 있는 과제가 없습니다.</p>
                 )}
               </>
             )}

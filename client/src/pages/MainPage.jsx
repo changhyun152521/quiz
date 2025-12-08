@@ -10,6 +10,7 @@ function MainPage({ onLoginSuccess, onBackToDashboard, onShowCourseSelection }) 
   const [isLoading, setIsLoading] = useState(true)
   const [showContent, setShowContent] = useState(false)
   const [hasToken, setHasToken] = useState(false)
+  const [user, setUser] = useState(null)
 
   // 페이지 마운트 시 상단으로 스크롤
   useEffect(() => {
@@ -30,6 +31,47 @@ function MainPage({ onLoginSuccess, onBackToDashboard, onShowCourseSelection }) 
 
   // MainPage에서는 자동 로그인을 하지 않음 (App.jsx에서 처리)
   // 자동 로그인은 App.jsx의 useEffect에서만 처리
+
+  // 사용자 정보 확인 (localStorage에서)
+  useEffect(() => {
+    const userData = localStorage.getItem('user')
+    if (userData) {
+      try {
+        const parsedUser = JSON.parse(userData)
+        setUser(parsedUser)
+      } catch (error) {
+        console.error('사용자 정보 파싱 오류:', error)
+      }
+    }
+  }, [])
+
+  // 로그인 성공 시 사용자 정보 업데이트
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const userData = localStorage.getItem('user')
+      if (userData) {
+        try {
+          const parsedUser = JSON.parse(userData)
+          setUser(parsedUser)
+        } catch (error) {
+          console.error('사용자 정보 파싱 오류:', error)
+        }
+      } else {
+        setUser(null)
+      }
+    }
+
+    // storage 이벤트 리스너 (다른 탭에서 로그인/로그아웃 시)
+    window.addEventListener('storage', handleStorageChange)
+    
+    // 주기적으로 확인 (같은 탭에서의 변경 감지)
+    const interval = setInterval(handleStorageChange, 1000)
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange)
+      clearInterval(interval)
+    }
+  }, [])
 
   return (
     <div className="App">
@@ -89,8 +131,6 @@ function MainPage({ onLoginSuccess, onBackToDashboard, onShowCourseSelection }) 
           <div className="banner-text">QUIZ LAB</div>
           <a 
             href="https://www.mathchang.com/" 
-            target="_blank" 
-            rel="noopener noreferrer"
             className="banner-home-link"
           >
             이창현수학 돌아가기
@@ -102,7 +142,9 @@ function MainPage({ onLoginSuccess, onBackToDashboard, onShowCourseSelection }) 
       <main className="main-container">
         <div className="main-content">
           <h1 className="main-title">QUIZ LAB</h1>
-          <p className="main-subtitle">학생들의 수업 및 TEST 관리</p>
+          <p className="main-subtitle">
+            {user && user.name ? `${user.name}의 QUIZ 및 과제 관리` : '학생들의 QUIZ 및 과제 관리'}
+          </p>
           
           {/* 테스트 아이콘 */}
           <div className="math-icon-container">
@@ -123,7 +165,7 @@ function MainPage({ onLoginSuccess, onBackToDashboard, onShowCourseSelection }) 
             </div>
           </div>
 
-          {/* 학습 시작하기 버튼 */}
+          {/* 역할별 버튼 */}
           <div className="button-group">
             <button 
               className="start-button"
@@ -139,14 +181,17 @@ function MainPage({ onLoginSuccess, onBackToDashboard, onShowCourseSelection }) 
                     
                     const data = await response.json()
                     if (data.success) {
-                      // 유효한 토큰이 있으면 강좌 선택 모달 표시
+                      // 유효한 토큰이 있으면 역할에 따라 처리
                       const user = data.data?.user || JSON.parse(userData)
+                      
+                      // 학생인 경우 강좌 선택 모달 표시
                       if (onShowCourseSelection && (user.role === 'student' || !user.role)) {
                         // 먼저 로그인 상태 업데이트
                         onLoginSuccess(user, false)
                         // 그 다음 강좌 선택 모달 표시
                         onShowCourseSelection()
                       } else {
+                        // 강사나 관리자는 바로 대시보드로
                         onLoginSuccess(user, false)
                       }
                       return
@@ -156,6 +201,7 @@ function MainPage({ onLoginSuccess, onBackToDashboard, onShowCourseSelection }) 
                       localStorage.removeItem('user')
                       localStorage.removeItem('rememberMe')
                       setHasToken(false)
+                      setUser(null)
                       setShowLoginModal(true)
                     }
                   } catch (error) {
@@ -169,7 +215,19 @@ function MainPage({ onLoginSuccess, onBackToDashboard, onShowCourseSelection }) 
                 }
               }}
             >
-              학습 시작하기
+              {(() => {
+                if (!user) {
+                  return '로그인하기'
+                } else if (user.role === 'student' || !user.role) {
+                  return '학습 시작하기'
+                } else if (user.role === 'teacher') {
+                  return '강사 페이지'
+                } else if (user.role === 'admin' || user.userId === 'admin') {
+                  return '관리자 페이지'
+                } else {
+                  return '로그인하기'
+                }
+              })()}
             </button>
           </div>
         </div>
@@ -189,12 +247,29 @@ function MainPage({ onLoginSuccess, onBackToDashboard, onShowCourseSelection }) 
 
       <Login 
         showModal={showLoginModal} 
-        onClose={() => setShowLoginModal(false)}
+        onClose={() => {
+          setShowLoginModal(false);
+          // 로그인 모달이 닫힐 때 사용자 정보 다시 확인
+          const userData = localStorage.getItem('user');
+          if (userData) {
+            try {
+              const parsedUser = JSON.parse(userData);
+              setUser(parsedUser);
+            } catch (error) {
+              console.error('사용자 정보 파싱 오류:', error);
+            }
+          } else {
+            setUser(null);
+          }
+        }}
         onShowSignUp={() => {
           setShowLoginModal(false);
           setShowSignUpModal(true);
         }}
-        onLoginSuccess={onLoginSuccess}
+        onLoginSuccess={(userData) => {
+          setUser(userData);
+          onLoginSuccess(userData);
+        }}
       />
 
       <SignUp 

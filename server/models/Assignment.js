@@ -24,11 +24,11 @@ const assignmentSchema = new mongoose.Schema({
     min: [1, '문항 수는 최소 1개 이상이어야 합니다']
   },
 
-  // 과제 타입 (QUIZ, 실전TEST)
+  // 과제 타입 (QUIZ, 클리닉)
   assignmentType: {
     type: String,
     required: [true, '과제 타입은 필수입니다'],
-    enum: ['QUIZ', '실전TEST'],
+    enum: ['QUIZ', '클리닉'],
     default: 'QUIZ'
   },
 
@@ -120,6 +120,11 @@ const assignmentSchema = new mongoose.Schema({
       submittedAt: {
         type: Date,
         default: Date.now
+      },
+      // 학생 풀이 이미지 URL 배열 (Cloudinary)
+      solutionImages: {
+        type: [String],
+        default: []
       }
     }],
     default: []

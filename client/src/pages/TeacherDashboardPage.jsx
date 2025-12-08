@@ -15,7 +15,7 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'smooth' })
   }, [])
-
+  
   // 학생 관리 상태
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -145,11 +145,11 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
 
   // 페이지 최초 로드 시 한 번만 데이터 가져오기
   useEffect(() => {
-    fetchStudents();
-    fetchCourses();
-    fetchTeacherList();
+      fetchStudents();
+      fetchCourses();
+      fetchTeacherList();
     fetchAllAssignments();
-    fetchAssignments();
+      fetchAssignments();
   }, []); // 빈 배열로 최초 한 번만 실행
 
   // 학생 저장 (생성 또는 수정)
@@ -171,7 +171,7 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
         alert(studentId ? '학생 정보가 수정되었습니다.' : '학생이 추가되었습니다.');
         // 상태 업데이트는 모달이 닫힌 후에 수행
         setTimeout(() => {
-          fetchStudents();
+        fetchStudents();
         }, 100);
       } else {
         alert(data.message || '저장에 실패했습니다.');
@@ -239,7 +239,7 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
         alert(courseId ? '강좌 정보가 수정되었습니다.' : '강좌가 추가되었습니다.');
         // 상태 업데이트는 모달이 닫힌 후에 수행
         setTimeout(() => {
-          fetchCourses();
+        fetchCourses();
         }, 100);
       } else {
         alert(data.message || '저장에 실패했습니다.');
@@ -367,7 +367,7 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
         alert(assignmentId ? '과제 정보가 수정되었습니다.' : '과제가 추가되었습니다.');
         // 상태 업데이트는 모달이 닫힌 후에 수행
         setTimeout(() => {
-          fetchAssignments();
+        fetchAssignments();
         }, 100);
       } else {
         alert(data.message || '저장에 실패했습니다.');
@@ -729,13 +729,15 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
                                 <div className="table-actions">
                                   <button
                                     className="action-btn assignment-btn"
-                                    onClick={() => {
+                                    onClick={async () => {
                                       setSelectedCourseForAssignment(course);
+                                      // 모달 열기 전에 allAssignments 새로고침
+                                      await fetchAllAssignments();
                                       setShowCourseAssignmentModal(true);
                                     }}
-                                    title="과제 관리"
+                                    title="과제 추가"
                                   >
-                                    과제
+                                    과제 추가
                                   </button>
                                   <button
                                     className="action-btn test-result-btn"
@@ -743,9 +745,9 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
                                       setSelectedCourseForTest(course);
                                       setShowTestResultModal(true);
                                     }}
-                                    title="테스트 조회"
+                                    title="과제 조회"
                                   >
-                                    테스트 조회
+                                    과제 조회
                                   </button>
                                   <button
                                     className="action-btn edit-btn"
@@ -853,7 +855,7 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
                               <td>{assignment.assignmentName}</td>
                               <td>{assignment.subject}</td>
                               <td>{assignment.questionCount}개</td>
-                              <td>{assignment.assignmentType}</td>
+                              <td>{assignment.assignmentType === '실전TEST' ? '클리닉' : assignment.assignmentType}</td>
                               <td>
                                 {assignment.startDate 
                                   ? new Date(assignment.startDate).toLocaleDateString('ko-KR')
@@ -986,6 +988,7 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
           setAllAssignments(prev => [newAssignment, ...prev]);
           // 과제 목록 새로고침
           fetchAssignments();
+          fetchAllAssignments(); // allAssignments도 새로고침
         }}
       />
 

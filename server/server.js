@@ -32,14 +32,21 @@ app.use(cors(corsOptions));
 // OPTIONS 요청 처리 (CORS preflight) - 모든 경로에 대해
 app.options('*', cors(corsOptions));
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// JSON body parser - 큰 이미지 업로드를 위해 크기 제한 증가 (50MB)
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// 스케줄러 임포트
+const { scheduleCleanup } = require('./jobs/cleanupOldSolutions');
 
 // MongoDB 연결 및 서버 시작
 const startServer = async () => {
   try {
     // MongoDB 연결
     await connectDB();
+    
+    // 스케줄러 시작 (MongoDB 연결 후)
+    scheduleCleanup();
     
     // 서버 시작 (포트 에러는 서버 시작 시 처리)
     const server = app.listen(PORT, () => {

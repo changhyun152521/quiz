@@ -64,7 +64,7 @@ function Dashboard({ user, onLogout }) {
           {/* 제목 */}
           <div className="dashboard-title-section">
             <h1 className="dashboard-title">
-              {user?.name || '학생'}학생의 TEST 현황
+              {user?.name || '학생'}학생의 과제현황
             </h1>
           </div>
 
@@ -86,7 +86,7 @@ function Dashboard({ user, onLogout }) {
               className={`dashboard-tab ${activeTab === 'test' ? 'active' : ''}`}
               onClick={() => setActiveTab('test')}
             >
-              실전TEST
+              클리닉
             </button>
           </div>
 

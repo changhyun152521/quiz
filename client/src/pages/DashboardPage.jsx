@@ -92,7 +92,7 @@ function DashboardPage({ user, onLogout, onGoToMainPage, selectedCourse }) {
           if (!assignment || !assignment.startDate) return;
 
           const assignmentDate = new Date(assignment.startDate);
-          
+
           // 최근 한 달 동안 부여된 과제만 추가
           if (assignmentDate >= oneMonthAgo && assignmentDate <= now) {
             filteredAssignments.push({
@@ -105,10 +105,10 @@ function DashboardPage({ user, onLogout, onGoToMainPage, selectedCourse }) {
       }
     });
 
-    // 생성일 기준 정렬 (최신 것이 상단)
+    // 과제 시작일 기준 정렬 (최신 것이 상단)
     filteredAssignments.sort((a, b) => {
-      const dateA = new Date(a.createdAt || a.startDate);
-      const dateB = new Date(b.createdAt || b.startDate);
+      const dateA = new Date(a.startDate || 0);
+      const dateB = new Date(b.startDate || 0);
       return dateB - dateA; // 최신 것이 먼저 오도록 내림차순 정렬
     });
 
@@ -119,7 +119,7 @@ function DashboardPage({ user, onLogout, onGoToMainPage, selectedCourse }) {
   const getFilteredAssignments = () => {
     if (activeTab === 'all') return assignments;
     if (activeTab === 'quiz') return assignments.filter(a => a.assignmentType === 'QUIZ');
-    if (activeTab === 'test') return assignments.filter(a => a.assignmentType === '실전TEST');
+    if (activeTab === 'test') return assignments.filter(a => a.assignmentType === '클리닉');
     return assignments;
   };
 
@@ -252,9 +252,9 @@ function DashboardPage({ user, onLogout, onGoToMainPage, selectedCourse }) {
                   <option value="">등록된 반이 없습니다</option>
                 ) : (
                   courses.map(course => (
-                    <option key={course._id} value={course._id}>
-                      {course.courseName}
-                    </option>
+                  <option key={course._id} value={course._id}>
+                    {course.courseName}
+                  </option>
                   ))
                 )}
               </select>
@@ -269,7 +269,7 @@ function DashboardPage({ user, onLogout, onGoToMainPage, selectedCourse }) {
           {/* 제목 */}
           <div className="dashboard-title-section">
             <h1 className="dashboard-title">
-              {user?.name || '학생'}학생의 TEST 현황
+              {user?.name || '학생'}학생의 과제현황
             </h1>
             <p className="dashboard-date-range">
               {(() => {
@@ -304,7 +304,7 @@ function DashboardPage({ user, onLogout, onGoToMainPage, selectedCourse }) {
               className={`dashboard-tab ${activeTab === 'test' ? 'active' : ''}`}
               onClick={() => setActiveTab('test')}
             >
-              실전TEST
+              클리닉
             </button>
           </div>
 
@@ -345,7 +345,7 @@ function DashboardPage({ user, onLogout, onGoToMainPage, selectedCourse }) {
               </div>
             ) : (
               <>
-                <div className="assignments-grid">
+              <div className="assignments-grid">
                   {paginatedAssignments.map(assignment => {
                   // 제출 상태 확인
                   const submission = assignment.submissions?.find(
@@ -384,14 +384,28 @@ function DashboardPage({ user, onLogout, onGoToMainPage, selectedCourse }) {
                     <div
                       key={assignment._id}
                       className="assignment-card"
-                      onClick={() => {
+                      onClick={async () => {
                         // 이미지가 없어도 빈 캔버스로 필기할 수 있도록 상세 페이지로 이동
-                        setSelectedAssignment(assignment);
+                        // assignment의 전체 정보(answers 포함)를 API에서 가져오기
+                        try {
+                          const response = await get(`/api/assignments/${assignment._id}`);
+                          const data = await response.json();
+                          if (data.success && data.data) {
+                            setSelectedAssignment(data.data);
+                          } else {
+                            // API 호출 실패 시 기존 assignment 사용
+                            setSelectedAssignment(assignment);
+                          }
+                        } catch (error) {
+                          console.error('과제 정보 가져오기 오류:', error);
+                          // 에러 발생 시 기존 assignment 사용
+                          setSelectedAssignment(assignment);
+                        }
                       }}
                     >
                       <div className="assignment-card-header">
                         <div className="assignment-type-badge">
-                          {assignment.assignmentType === 'QUIZ' ? 'QUIZ' : '실전TEST'}
+                          {assignment.assignmentType === 'QUIZ' ? 'QUIZ' : '클리닉'}
                         </div>
                         <div className="assignment-status-badge">
                           {statusBadge}
@@ -423,10 +437,24 @@ function DashboardPage({ user, onLogout, onGoToMainPage, selectedCourse }) {
                         {!isSubmitted ? (
                           <button 
                             className="assignment-submit-btn"
-                            onClick={(e) => {
+                            onClick={async (e) => {
                               e.stopPropagation();
                               // 이미지가 없어도 빈 캔버스로 필기할 수 있도록 상세 페이지로 이동
-                              setSelectedAssignment(assignment);
+                              // assignment의 전체 정보(answers 포함)를 API에서 가져오기
+                              try {
+                                const response = await get(`/api/assignments/${assignment._id}`);
+                                const data = await response.json();
+                                if (data.success && data.data) {
+                                  setSelectedAssignment(data.data);
+                                } else {
+                                  // API 호출 실패 시 기존 assignment 사용
+                                  setSelectedAssignment(assignment);
+                                }
+                              } catch (error) {
+                                console.error('과제 정보 가져오기 오류:', error);
+                                // 에러 발생 시 기존 assignment 사용
+                                setSelectedAssignment(assignment);
+                              }
                             }}
                           >
                             답안 제출하기
@@ -447,7 +475,7 @@ function DashboardPage({ user, onLogout, onGoToMainPage, selectedCourse }) {
                     </div>
                   );
                 })}
-                </div>
+              </div>
                 
                 {/* 페이지네이션 */}
                 {totalPages > 1 && (

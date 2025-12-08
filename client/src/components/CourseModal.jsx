@@ -66,32 +66,36 @@ function CourseModal({ showModal, onClose, course, onSave, mode, teachers = [], 
     });
   };
 
-  // 학생 검색 필터링
-  const filteredStudents = students.filter(student => {
-    if (!studentSearchTerm) return true;
-    const term = studentSearchTerm.toLowerCase();
-    return (
-      student.name?.toLowerCase().includes(term) ||
-      student.userId?.toLowerCase().includes(term) ||
-      student.schoolName?.toLowerCase().includes(term) ||
-      student.studentPhone?.toLowerCase().includes(term) ||
-      student.email?.toLowerCase().includes(term)
-    );
-  });
+  // 학생 검색 필터링 (이미 선택된 학생 제외)
+  const filteredStudents = students
+    .filter(student => !formData.students.includes(student._id)) // 이미 선택된 학생 제외
+    .filter(student => {
+      if (!studentSearchTerm) return true;
+      const term = studentSearchTerm.toLowerCase();
+      return (
+        student.name?.toLowerCase().includes(term) ||
+        student.userId?.toLowerCase().includes(term) ||
+        student.schoolName?.toLowerCase().includes(term) ||
+        student.studentPhone?.toLowerCase().includes(term) ||
+        student.email?.toLowerCase().includes(term)
+      );
+    });
 
-  // 과제 검색 필터링
-  const filteredAssignments = assignments.filter(assignment => {
-    if (!assignmentSearchTerm) return true;
-    const term = assignmentSearchTerm.toLowerCase();
-    return (
-      assignment.assignmentName?.toLowerCase().includes(term) ||
-      assignment.subject?.toLowerCase().includes(term) ||
-      assignment.assignmentType?.toLowerCase().includes(term) ||
-      formatDate(assignment.createdAt)?.toLowerCase().includes(term) ||
-      formatDate(assignment.startDate)?.toLowerCase().includes(term) ||
-      formatDate(assignment.dueDate)?.toLowerCase().includes(term)
-    );
-  });
+  // 과제 검색 필터링 (이미 선택된 과제 제외)
+  const filteredAssignments = assignments
+    .filter(assignment => !formData.assignments.includes(assignment._id)) // 이미 선택된 과제 제외
+    .filter(assignment => {
+      if (!assignmentSearchTerm) return true;
+      const term = assignmentSearchTerm.toLowerCase();
+      return (
+        assignment.assignmentName?.toLowerCase().includes(term) ||
+        assignment.subject?.toLowerCase().includes(term) ||
+        assignment.assignmentType?.toLowerCase().includes(term) ||
+        formatDate(assignment.createdAt)?.toLowerCase().includes(term) ||
+        formatDate(assignment.startDate)?.toLowerCase().includes(term) ||
+        formatDate(assignment.dueDate)?.toLowerCase().includes(term)
+      );
+    });
 
   // 학생 페이지네이션
   const totalStudentPages = Math.ceil(filteredStudents.length / itemsPerPage);
@@ -418,15 +422,15 @@ function CourseModal({ showModal, onClose, course, onSave, mode, teachers = [], 
                           onChange={(e) => setStudentSearchTerm(e.target.value)}
                         />
                       </div>
-                      <div className="checkbox-list">
+                <div className="checkbox-list">
                         {paginatedStudents.length > 0 ? (
                           paginatedStudents.map((student) => (
                             <label key={student._id} className="checkbox-item student-item">
-                              <input
-                                type="checkbox"
-                                checked={formData.students.includes(student._id)}
-                                onChange={() => handleMultiSelect('students', student._id)}
-                              />
+                      <input
+                        type="checkbox"
+                        checked={formData.students.includes(student._id)}
+                        onChange={() => handleMultiSelect('students', student._id)}
+                      />
                               <div className="student-info">
                                 <div className="student-main-info">
                                   <span className="student-name">{student.name}</span>
@@ -441,7 +445,7 @@ function CourseModal({ showModal, onClose, course, onSave, mode, teachers = [], 
                                   )}
                                 </div>
                               </div>
-                            </label>
+                    </label>
                           ))
                         ) : (
                           <p className="empty-message">검색 결과가 없습니다.</p>
@@ -465,8 +469,8 @@ function CourseModal({ showModal, onClose, course, onSave, mode, teachers = [], 
                               >
                                 {page}
                               </button>
-                            ))}
-                          </div>
+                  ))}
+                </div>
                           <button
                             className="pagination-btn"
                             onClick={() => setCurrentStudentPage(prev => Math.min(totalStudentPages, prev + 1))}
@@ -540,7 +544,7 @@ function CourseModal({ showModal, onClose, course, onSave, mode, teachers = [], 
                                       <span className="selected-assignment-subject">({assignment.subject})</span>
                                     )}
                                     {assignment.assignmentType && (
-                                      <span className="selected-assignment-type">{assignment.assignmentType}</span>
+                                      <span className="selected-assignment-type">{assignment.assignmentType === '실전TEST' ? '클리닉' : assignment.assignmentType}</span>
                                     )}
                                   </div>
                                   <button
@@ -603,15 +607,15 @@ function CourseModal({ showModal, onClose, course, onSave, mode, teachers = [], 
                           onChange={(e) => setAssignmentSearchTerm(e.target.value)}
                         />
                       </div>
-                      <div className="checkbox-list">
+                <div className="checkbox-list">
                         {paginatedAssignments.length > 0 ? (
                           paginatedAssignments.map((assignment) => (
                             <label key={assignment._id} className="checkbox-item assignment-item">
-                              <input
-                                type="checkbox"
-                                checked={formData.assignments.includes(assignment._id)}
-                                onChange={() => handleMultiSelect('assignments', assignment._id)}
-                              />
+                      <input
+                        type="checkbox"
+                        checked={formData.assignments.includes(assignment._id)}
+                        onChange={() => handleMultiSelect('assignments', assignment._id)}
+                      />
                               <div className="assignment-info">
                                 <div className="assignment-main-info">
                                   <span className="assignment-name">{assignment.assignmentName}</span>
@@ -619,7 +623,7 @@ function CourseModal({ showModal, onClose, course, onSave, mode, teachers = [], 
                                     <span className="assignment-subject">({assignment.subject})</span>
                                   )}
                                   {assignment.assignmentType && (
-                                    <span className="assignment-type-badge">{assignment.assignmentType}</span>
+                                    <span className="assignment-type-badge">{assignment.assignmentType === '실전TEST' ? '클리닉' : assignment.assignmentType}</span>
                                   )}
                                 </div>
                                 <div className="assignment-details">
@@ -639,7 +643,7 @@ function CourseModal({ showModal, onClose, course, onSave, mode, teachers = [], 
                                   </div>
                                 </div>
                               </div>
-                            </label>
+                    </label>
                           ))
                         ) : (
                           <p className="empty-message">검색 결과가 없습니다.</p>
@@ -663,8 +667,8 @@ function CourseModal({ showModal, onClose, course, onSave, mode, teachers = [], 
                               >
                                 {page}
                               </button>
-                            ))}
-                          </div>
+                  ))}
+                </div>
                           <button
                             className="pagination-btn"
                             onClick={() => setCurrentAssignmentPage(prev => Math.min(totalAssignmentPages, prev + 1))}

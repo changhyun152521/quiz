@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
-import { post } from '../utils/api';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { get, post } from '../utils/api';
 import '../components/AssignmentDetail.css';
 
 function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) {
   // 학생 ID 가져오기
   const studentId = user?._id || user?.id || null;
+  const [currentAssignment, setCurrentAssignment] = useState(assignment); // assignment를 state로 관리
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isDrawing, setIsDrawing] = useState(false);
   const [penColor, setPenColor] = useState('#000000');
@@ -26,6 +27,9 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
   const drawingCanvasRef = useRef(null);
   const imageRef = useRef(null);
   const originalImageRef = useRef(null);
+  const handleMouseDownRef = useRef(null);
+  const handleMouseMoveRef = useRef(null);
+  const handleMouseUpRef = useRef(null);
   const [images, setImages] = useState([]);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [baseDisplaySize, setBaseDisplaySize] = useState({ width: 0, height: 0 });
@@ -35,6 +39,55 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
   const [hasChanges, setHasChanges] = useState(false); // 펜/지우개 사용 여부 추적
   const [submissionResult, setSubmissionResult] = useState(null); // 제출 결과 저장
   const [isSubmitted, setIsSubmitted] = useState(false); // 제출 상태
+  const [drawingHistory, setDrawingHistory] = useState([]); // 그리기 히스토리 (각 stroke마다 저장)
+  const [isLoadingAssignment, setIsLoadingAssignment] = useState(false); // assignment 로딩 상태
+
+  // assignment prop이 변경될 때 currentAssignment 업데이트
+  useEffect(() => {
+    if (assignment) {
+      setCurrentAssignment(assignment);
+    }
+  }, [assignment]);
+
+  // currentAssignment가 업데이트되면 제출된 답안도 다시 설정
+  useEffect(() => {
+    const assignmentToCheck = currentAssignment || assignment;
+    if (assignmentToCheck && user && assignmentToCheck.submissions && isSubmitted) {
+      const submission = assignmentToCheck.submissions.find(
+        sub => {
+          const subStudentId = sub.studentId?._id || sub.studentId;
+          const userId = user._id;
+          return subStudentId && userId && String(subStudentId) === String(userId);
+        }
+      );
+      
+      if (submission && submission.studentAnswers && Array.isArray(submission.studentAnswers)) {
+        const questionCount = Number(assignmentToCheck.questionCount) || submission.studentAnswers.length;
+        const submittedAnswers = [];
+        
+        // 문항 번호 순서대로 정렬
+        const sortedAnswers = [...submission.studentAnswers].sort((a, b) => {
+          const numA = Number(a.questionNumber) || 0;
+          const numB = Number(b.questionNumber) || 0;
+          return numA - numB;
+        });
+        
+        // 모든 문항에 대해 답안 설정 (없는 문항은 빈 문자열)
+        for (let i = 1; i <= questionCount; i++) {
+          const submittedAnswer = sortedAnswers.find(sa => 
+            Number(sa.questionNumber) === i || String(sa.questionNumber) === String(i)
+          );
+          submittedAnswers.push({
+            questionNumber: i,
+            answer: submittedAnswer?.answer || '',
+            score: 1
+          });
+        }
+        
+        setAnswers(submittedAnswers);
+      }
+    }
+  }, [currentAssignment, user, isSubmitted]);
 
   // 페이지 마운트 시 상단으로 스크롤
   useEffect(() => {
@@ -66,6 +119,7 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
       setCurrentImageIndex(0);
       setZoom(1);
       setPanOffset({ x: 0, y: 0 });
+      setDrawingHistory([]); // 이미지 변경 시 히스토리 초기화
       // 첫 이미지의 변경사항 여부 확인 (24시간 이내인 경우만)
       if (assignment && assignment._id && studentId) {
         const submittedAtKey = `assignment_${assignment._id}_student_${studentId}_submittedAt`;
@@ -95,7 +149,7 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
         if (shouldCheckData && studentId) {
           const savedData = localStorage.getItem(`assignment_${assignment._id}_student_${studentId}_image_0`) ||
                            localStorage.getItem(`assignment_${assignment._id}_student_${studentId}_image_empty`);
-          setHasChanges(!!savedData);
+        setHasChanges(!!savedData);
         } else {
           setHasChanges(false);
         }
@@ -142,37 +196,62 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
 
   // 제출 상태 확인 및 만료된 데이터 정리
   useEffect(() => {
-    if (assignment && user && assignment.submissions) {
-      const submission = assignment.submissions.find(
+    const assignmentToCheck = currentAssignment || assignment;
+    console.log('제출 상태 확인 - assignmentToCheck:', {
+      hasAssignment: !!assignmentToCheck,
+      hasSubmissions: !!assignmentToCheck?.submissions,
+      submissionsCount: assignmentToCheck?.submissions?.length,
+      submissions: assignmentToCheck?.submissions,
+      hasUser: !!user,
+      userId: user?._id
+    });
+    
+    if (assignmentToCheck && user && assignmentToCheck.submissions) {
+      const submission = assignmentToCheck.submissions.find(
         sub => {
           const subStudentId = sub.studentId?._id || sub.studentId;
           const userId = user._id;
-          return subStudentId && userId && String(subStudentId) === String(userId);
+          const match = subStudentId && userId && String(subStudentId) === String(userId);
+          console.log('제출 상태 확인 - submission 비교:', {
+            subStudentId,
+            userId,
+            match,
+            submission: sub
+          });
+          return match;
         }
       );
+      
+      console.log('제출 상태 확인 - 찾은 submission:', {
+        hasSubmission: !!submission,
+        submission: submission,
+        hasStudentAnswers: !!submission?.studentAnswers,
+        studentAnswers: submission?.studentAnswers
+      });
       
       if (submission) {
         setIsSubmitted(true);
         setSubmissionResult({
           correctCount: submission.correctCount || 0,
           wrongCount: submission.wrongCount || 0,
-          totalCount: assignment.questionCount || 0
+          totalCount: assignmentToCheck.questionCount || 0
         });
         
         // 제출 시간을 localStorage에 저장 (없는 경우에만)
         if (studentId) {
-          const submittedAtKey = `assignment_${assignment._id}_student_${studentId}_submittedAt`;
+          const submittedAtKey = `assignment_${assignmentToCheck._id}_student_${studentId}_submittedAt`;
           if (!localStorage.getItem(submittedAtKey) && submission.submittedAt) {
             localStorage.setItem(submittedAtKey, new Date(submission.submittedAt).toISOString());
           }
         }
         
         // 만료된 캔버스 데이터 정리
-        cleanupExpiredCanvasData(assignment._id);
+        cleanupExpiredCanvasData(assignmentToCheck._id);
         
         // 제출된 답안으로 answers 초기화
         if (submission.studentAnswers && Array.isArray(submission.studentAnswers)) {
-          const questionCount = Number(assignment.questionCount) || submission.studentAnswers.length;
+          console.log('제출 상태 확인 - studentAnswers 처리 시작:', submission.studentAnswers);
+          const questionCount = Number(assignmentToCheck.questionCount) || submission.studentAnswers.length;
           const submittedAnswers = [];
           
           // 문항 번호 순서대로 정렬
@@ -181,6 +260,8 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
             const numB = Number(b.questionNumber) || 0;
             return numA - numB;
           });
+          
+          console.log('제출 상태 확인 - 정렬된 답안:', sortedAnswers);
           
           // 모든 문항에 대해 답안 설정 (없는 문항은 빈 문자열)
           for (let i = 1; i <= questionCount; i++) {
@@ -194,23 +275,33 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
             });
           }
           
+          console.log('제출 상태 확인 - 설정할 답안:', submittedAnswers);
           setAnswers(submittedAnswers);
+        } else {
+          console.warn('제출 상태 확인 - studentAnswers가 없거나 배열이 아님:', {
+            hasStudentAnswers: !!submission.studentAnswers,
+            studentAnswers: submission.studentAnswers,
+            isArray: Array.isArray(submission.studentAnswers)
+          });
         }
       } else {
+        console.log('제출 상태 확인 - submission을 찾을 수 없음');
         setIsSubmitted(false);
         setSubmissionResult(null);
       }
-    } else if (assignment && !user) {
+    } else if (assignmentToCheck && !user) {
       // user가 없으면 제출 상태 초기화
+      console.log('제출 상태 확인 - user가 없음');
       setIsSubmitted(false);
       setSubmissionResult(null);
     }
     
     // 컴포넌트 마운트 시에도 만료된 데이터 정리
-    if (assignment && assignment._id) {
-      cleanupExpiredCanvasData(assignment._id);
+    const assignmentToClean = currentAssignment || assignment;
+    if (assignmentToClean && assignmentToClean._id) {
+      cleanupExpiredCanvasData(assignmentToClean._id);
     }
-  }, [assignment, user]);
+  }, [currentAssignment, assignment, user]);
 
   // 정답 초기화 - 문항수만큼 필드 생성 (제출되지 않은 경우만)
   useEffect(() => {
@@ -239,6 +330,67 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
     }
   }, [assignment, isSubmitted, user]);
 
+  // 정답 패널이 열릴 때마다 assignment의 최신 정보 가져오기 (answers 포함)
+  // 주의: 이 useEffect는 정답 버튼 클릭 시 이미 데이터를 가져오므로 중복 방지
+  useEffect(() => {
+    // 정답 패널이 열렸지만 아직 데이터가 로드되지 않은 경우에만 실행
+    if (showAnswerPanel && assignment?._id && !currentAssignment?.answers && isSubmitted) {
+      const fetchAssignment = async () => {
+        setIsLoadingAssignment(true);
+        try {
+          const response = await get(`/api/assignments/${assignment._id}`);
+          const data = await response.json();
+          if (data.success && data.data) {
+            setCurrentAssignment(data.data);
+            if (onAssignmentUpdate) {
+              onAssignmentUpdate(data.data);
+            }
+            
+            // 제출된 답안 설정
+            if (data.data.submissions && user) {
+              const submission = data.data.submissions.find(
+                sub => {
+                  const subStudentId = sub.studentId?._id || sub.studentId;
+                  const userId = user._id;
+                  return subStudentId && userId && String(subStudentId) === String(userId);
+                }
+              );
+              
+              if (submission && submission.studentAnswers && Array.isArray(submission.studentAnswers)) {
+                const questionCount = Number(data.data.questionCount) || submission.studentAnswers.length;
+                const submittedAnswers = [];
+                
+                const sortedAnswers = [...submission.studentAnswers].sort((a, b) => {
+                  const numA = Number(a.questionNumber) || 0;
+                  const numB = Number(b.questionNumber) || 0;
+                  return numA - numB;
+                });
+                
+                for (let i = 1; i <= questionCount; i++) {
+                  const submittedAnswer = sortedAnswers.find(sa => 
+                    Number(sa.questionNumber) === i || String(sa.questionNumber) === String(i)
+                  );
+                  submittedAnswers.push({
+                    questionNumber: i,
+                    answer: submittedAnswer?.answer || '',
+                    score: 1
+                  });
+                }
+                
+                setAnswers(submittedAnswers);
+              }
+            }
+          }
+        } catch (error) {
+          console.error('과제 정보 가져오기 오류:', error);
+        } finally {
+          setIsLoadingAssignment(false);
+        }
+      };
+      fetchAssignment();
+    }
+  }, [showAnswerPanel, assignment?._id, user, isSubmitted, currentAssignment]);
+
   // 캔버스 초기화 및 이미지 로드
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -248,6 +400,7 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
     const ctx = canvas.getContext('2d');
     const drawingCtx = drawingCanvas.getContext('2d');
     setImageLoaded(false);
+    setDrawingHistory([]); // 이미지 로드 시작 시 히스토리 초기화
 
     // 이미지가 없는 경우 빈 캔버스 초기화
     if (images.length === 0) {
@@ -498,26 +651,30 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
           
           if (shouldLoadData) {
             const savedData = localStorage.getItem(`assignment_${assignment._id}_student_${studentId}_image_${currentImageIndex}`);
-            if (savedData) {
-              const savedImg = new Image();
-              savedImg.onload = () => {
-                drawingCtx.drawImage(savedImg, 0, 0, drawingCanvas.width, drawingCanvas.height);
-                setImageLoaded(true);
-                setHasChanges(true); // 저장된 그리기가 있으면 변경사항 있음
-              };
-              savedImg.onerror = () => {
-                console.error('저장된 그리기 로드 실패');
-                setImageLoaded(true);
-                setHasChanges(false);
-              };
-              savedImg.src = savedData;
-            } else {
-              setImageLoaded(true);
-              setHasChanges(false); // 저장된 그리기가 없으면 변경사항 없음
+        if (savedData) {
+          const savedImg = new Image();
+          savedImg.onload = () => {
+            drawingCtx.drawImage(savedImg, 0, 0, drawingCanvas.width, drawingCanvas.height);
+            setImageLoaded(true);
+            setHasChanges(true); // 저장된 그리기가 있으면 변경사항 있음
+            // 저장된 데이터를 로드한 후 히스토리 초기화 (새로운 작업부터 히스토리 시작)
+            setDrawingHistory([]);
+          };
+          savedImg.onerror = () => {
+            console.error('저장된 그리기 로드 실패');
+            setImageLoaded(true);
+            setHasChanges(false);
+          };
+          savedImg.src = savedData;
+        } else {
+          setImageLoaded(true);
+          setHasChanges(false); // 저장된 그리기가 없으면 변경사항 없음
+          setDrawingHistory([]); // 히스토리 초기화
             }
           } else {
             setImageLoaded(true);
             setHasChanges(false); // 만료되어 삭제된 경우
+            setDrawingHistory([]); // 히스토리 초기화
           }
         }
       }, 100);
@@ -560,6 +717,219 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
     contentDiv.style.height = `${scaledHeight}px`;
   }, [zoom, imageLoaded, baseDisplaySize]);
 
+  // 터치 이벤트 리스너 직접 등록 (passive: false로 설정하여 preventDefault 가능하게)
+  useEffect(() => {
+    const drawingCanvas = drawingCanvasRef.current;
+    if (!drawingCanvas) return;
+
+    // 이벤트 핸들러를 useEffect 내부에서 직접 정의
+    const handleTouchStartLocal = (e) => {
+      e.preventDefault();
+      
+      const touches = Array.from(e.touches);
+      lastTouchesRef.current = touches;
+
+      // 두 개의 터치 포인트가 있으면 핀치 줌 시작
+      if (touches.length === 2) {
+        const distance = getTouchDistance(touches[0], touches[1]);
+        const center = getTouchCenter(touches[0], touches[1]);
+        
+        setIsPinching(true);
+        setPinchStartDistance(distance);
+        setPinchStartZoom(zoom);
+        setPinchCenter(center);
+        
+        // 그리기 및 팬 중지
+        setIsDrawing(false);
+        setIsPanning(false);
+        return;
+      }
+
+      // 한 개의 터치 포인트만 있으면 일반 터치 처리
+      if (touches.length === 1) {
+        const touch = touches[0];
+        // 이미지 영역 내에서만 작동 (직접 구현)
+        const drawingCanvas = drawingCanvasRef.current;
+        if (!drawingCanvas) return;
+        const rect = drawingCanvas.getBoundingClientRect();
+        const isInBounds = (
+          touch.clientX >= rect.left &&
+          touch.clientX <= rect.right &&
+          touch.clientY >= rect.top &&
+          touch.clientY <= rect.bottom
+        );
+        if (!isInBounds) {
+          return;
+        }
+        
+        // 핀치 중이 아니면 일반 터치 처리
+        if (!isPinching) {
+          // 직접 마우스 다운 로직 실행
+          if (imageLoaded) {
+            if (tool === 'select') {
+              setIsPanning(true);
+              setPanStart({ x: touch.clientX - panOffset.x, y: touch.clientY - panOffset.y });
+            } else if (tool === 'pen' || tool === 'eraser') {
+              setIsDrawing(true);
+              const drawingCanvas = drawingCanvasRef.current;
+              if (drawingCanvas) {
+                const rect = drawingCanvas.getBoundingClientRect();
+                const scaleX = drawingCanvas.width / rect.width;
+                const scaleY = drawingCanvas.height / rect.height;
+                const coords = {
+                  x: (touch.clientX - rect.left) * scaleX,
+                  y: (touch.clientY - rect.top) * scaleY
+                };
+                const ctx = drawingCanvas.getContext('2d');
+                ctx.beginPath();
+                ctx.moveTo(coords.x, coords.y);
+              }
+            }
+          }
+        }
+      }
+    };
+
+    const handleTouchMoveLocal = (e) => {
+      e.preventDefault();
+      
+      const touches = Array.from(e.touches);
+      lastTouchesRef.current = touches;
+
+      // 두 개의 터치 포인트가 있으면 핀치 줌 처리
+      if (touches.length === 2 && isPinching) {
+        const distance = getTouchDistance(touches[0], touches[1]);
+        const center = getTouchCenter(touches[0], touches[1]);
+        
+        // 줌 비율 계산
+        const scale = distance / pinchStartDistance;
+        const newZoom = Math.max(0.5, Math.min(3, pinchStartZoom * scale));
+        
+        // 핀치 중심점 기준으로 팬 오프셋 조정
+        const viewerContainer = document.querySelector('.image-viewer');
+        const contentDiv = document.querySelector('.image-viewer-content');
+        if (viewerContainer && contentDiv) {
+          const viewerRect = viewerContainer.getBoundingClientRect();
+          
+          // 현재 핀치 중심점을 뷰어 좌표계로 변환
+          const pinchX = center.x - viewerRect.left;
+          const pinchY = center.y - viewerRect.top;
+          
+          // 시작 핀치 중심점을 뷰어 좌표계로 변환
+          const startPinchX = pinchCenter.x - viewerRect.left;
+          const startPinchY = pinchCenter.y - viewerRect.top;
+          
+          // 줌 변화에 따른 오프셋 조정
+          const zoomDelta = newZoom - pinchStartZoom;
+          const offsetX = startPinchX - (startPinchX - panOffset.x) * (newZoom / pinchStartZoom);
+          const offsetY = startPinchY - (startPinchY - panOffset.y) * (newZoom / pinchStartZoom);
+          
+          // 핀치 중심점 이동에 따른 추가 오프셋
+          const centerDeltaX = pinchX - startPinchX;
+          const centerDeltaY = pinchY - startPinchY;
+          
+          setPanOffset({
+            x: offsetX + centerDeltaX,
+            y: offsetY + centerDeltaY
+          });
+          setPinchCenter(center);
+        }
+        
+        setZoom(newZoom);
+        return;
+      }
+
+      // 한 개의 터치 포인트만 있고 핀치 중이 아니면 일반 터치 처리
+      if (touches.length === 1 && !isPinching) {
+        const touch = touches[0];
+        // 직접 마우스 이동 로직 실행
+        if (imageLoaded) {
+          if (tool === 'select' && isPanning) {
+            if (isPointInImageBounds(touch.clientX, touch.clientY)) {
+              setPanOffset({
+                x: touch.clientX - panStart.x,
+                y: touch.clientY - panStart.y
+              });
+            }
+          } else if ((tool === 'pen' || tool === 'eraser') && isDrawing) {
+            const drawingCanvas = drawingCanvasRef.current;
+            if (drawingCanvas) {
+              const rect = drawingCanvas.getBoundingClientRect();
+              const scaleX = drawingCanvas.width / rect.width;
+              const scaleY = drawingCanvas.height / rect.height;
+              const coords = {
+                x: (touch.clientX - rect.left) * scaleX,
+                y: (touch.clientY - rect.top) * scaleY
+              };
+              const ctx = drawingCanvas.getContext('2d');
+              ctx.lineTo(coords.x, coords.y);
+              
+              if (tool === 'eraser') {
+                ctx.globalCompositeOperation = 'destination-out';
+                ctx.lineWidth = penSize;
+              } else {
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.strokeStyle = penColor;
+                ctx.lineWidth = penSize;
+              }
+              
+              ctx.lineCap = 'round';
+              ctx.lineJoin = 'round';
+              ctx.stroke();
+              setHasChanges(true);
+            }
+          }
+        }
+      }
+    };
+
+    const handleTouchEndLocal = (e) => {
+      e.preventDefault();
+      
+      const touches = Array.from(e.touches);
+      lastTouchesRef.current = touches;
+
+      // 핀치 줌 종료
+      if (isPinching && touches.length < 2) {
+        setIsPinching(false);
+        setPinchStartDistance(0);
+        setPinchStartZoom(1);
+        setPinchCenter({ x: 0, y: 0 });
+      }
+
+      // 모든 터치가 끝나면 일반 터치 종료
+      if (touches.length === 0) {
+        // 직접 마우스 업 로직 실행
+        if (isDrawing) {
+          const drawingCanvas = drawingCanvasRef.current;
+          if (drawingCanvas) {
+            const currentState = drawingCanvas.toDataURL('image/png');
+            setDrawingHistory(prev => [...prev, currentState]);
+          }
+          saveDrawing();
+          setIsDrawing(false);
+        }
+        if (isPanning) {
+          setIsPanning(false);
+        }
+      }
+    };
+
+    // passive: false로 이벤트 리스너 등록
+    drawingCanvas.addEventListener('touchstart', handleTouchStartLocal, { passive: false });
+    drawingCanvas.addEventListener('touchmove', handleTouchMoveLocal, { passive: false });
+    drawingCanvas.addEventListener('touchend', handleTouchEndLocal, { passive: false });
+    drawingCanvas.addEventListener('touchcancel', handleTouchEndLocal, { passive: false });
+
+    // cleanup 함수
+    return () => {
+      drawingCanvas.removeEventListener('touchstart', handleTouchStartLocal);
+      drawingCanvas.removeEventListener('touchmove', handleTouchMoveLocal);
+      drawingCanvas.removeEventListener('touchend', handleTouchEndLocal);
+      drawingCanvas.removeEventListener('touchcancel', handleTouchEndLocal);
+    };
+  }, [zoom, isPinching, pinchStartDistance, pinchStartZoom, pinchCenter, panOffset, imageLoaded, tool, penSize, penColor, isPanning, panStart, isDrawing]);
+
   // 이전 이미지로 이동
   const handlePrevImage = () => {
     if (currentImageIndex > 0) {
@@ -567,6 +937,7 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
       setCurrentImageIndex(currentImageIndex - 1);
       setZoom(1);
       setPanOffset({ x: 0, y: 0 });
+      setDrawingHistory([]); // 이미지 변경 시 히스토리 초기화
       // 다음 이미지의 변경사항 여부 확인 (24시간 이내인 경우만)
       if (studentId) {
         const submittedAtKey = `assignment_${assignment._id}_student_${studentId}_submittedAt`;
@@ -595,7 +966,7 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
         
         if (shouldCheckData) {
           const savedData = localStorage.getItem(`assignment_${assignment._id}_student_${studentId}_image_${currentImageIndex - 1}`);
-          setHasChanges(!!savedData);
+      setHasChanges(!!savedData);
         } else {
           setHasChanges(false);
         }
@@ -610,6 +981,7 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
       setCurrentImageIndex(currentImageIndex + 1);
       setZoom(1);
       setPanOffset({ x: 0, y: 0 });
+      setDrawingHistory([]); // 이미지 변경 시 히스토리 초기화
       // 다음 이미지의 변경사항 여부 확인 (24시간 이내인 경우만)
       if (studentId) {
         const submittedAtKey = `assignment_${assignment._id}_student_${studentId}_submittedAt`;
@@ -638,7 +1010,7 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
         
         if (shouldCheckData) {
           const savedData = localStorage.getItem(`assignment_${assignment._id}_student_${studentId}_image_${currentImageIndex + 1}`);
-          setHasChanges(!!savedData);
+      setHasChanges(!!savedData);
         } else {
           setHasChanges(false);
         }
@@ -699,17 +1071,52 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
     setZoom(prev => Math.max(prev - 0.25, 0.5));
   };
 
-  // 돌아가기 (그리기/지우기 취소)
+  // 돌아가기 (마지막 그리기/지우기 작업만 취소)
   const handleUndo = () => {
-    if (!hasChanges) return;
+    if (drawingHistory.length === 0) {
+      // 히스토리가 없으면 전체 지우기
+      const drawingCanvas = drawingCanvasRef.current;
+      if (drawingCanvas && studentId) {
+        const ctx = drawingCanvas.getContext('2d');
+        ctx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
+        localStorage.removeItem(`assignment_${assignment._id}_student_${studentId}_image_${currentImageIndex}`);
+        setHasChanges(false);
+        setDrawingHistory([]);
+      }
+      return;
+    }
     
+    // 마지막 작업 제거
+    const newHistory = [...drawingHistory];
+    newHistory.pop();
+    setDrawingHistory(newHistory);
+    
+    // 이전 상태로 복원
     const drawingCanvas = drawingCanvasRef.current;
-    if (drawingCanvas && studentId) {
+    if (drawingCanvas) {
       const ctx = drawingCanvas.getContext('2d');
       ctx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
-      // 저장된 그리기 데이터 삭제
-      localStorage.removeItem(`assignment_${assignment._id}_student_${studentId}_image_${currentImageIndex}`);
-      setHasChanges(false);
+      
+      // 마지막 상태로 복원
+      if (newHistory.length > 0) {
+        const lastState = newHistory[newHistory.length - 1];
+        const img = new Image();
+        img.onload = () => {
+          ctx.drawImage(img, 0, 0);
+          setHasChanges(true);
+          // 복원 후 localStorage에도 저장
+          saveDrawing();
+        };
+        img.onerror = () => {
+          console.error('히스토리 이미지 로드 실패');
+          setHasChanges(newHistory.length > 0);
+        };
+        img.src = lastState;
+      } else {
+        // 히스토리가 비어있으면 변경사항 없음
+        setHasChanges(false);
+        localStorage.removeItem(`assignment_${assignment._id}_student_${studentId}_image_${currentImageIndex}`);
+      }
     }
   };
 
@@ -779,7 +1186,13 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
   // 마우스 업
   const handleMouseUp = () => {
     if (isDrawing) {
-      // 그리기 완료
+      // 그리기 완료 - 현재 상태를 히스토리에 저장 (stroke 완료 시점)
+      const drawingCanvas = drawingCanvasRef.current;
+      if (drawingCanvas) {
+        const currentState = drawingCanvas.toDataURL('image/png');
+        setDrawingHistory(prev => [...prev, currentState]);
+      }
+      
       saveDrawing();
       setIsDrawing(false);
     }
@@ -803,8 +1216,8 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
     };
   };
 
-  // 터치 이벤트 처리
-  const handleTouchStart = (e) => {
+  // 터치 이벤트 처리 (useCallback으로 감싸서 useEffect 의존성 문제 해결)
+  const handleTouchStart = useCallback((e) => {
     e.preventDefault();
     
     const touches = Array.from(e.touches);
@@ -829,23 +1242,23 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
     // 한 개의 터치 포인트만 있으면 일반 터치 처리
     if (touches.length === 1) {
       const touch = touches[0];
-      // 이미지 영역 내에서만 작동
-      if (!isPointInImageBounds(touch.clientX, touch.clientY)) {
-        return;
-      }
+    // 이미지 영역 내에서만 작동
+    if (!isPointInImageBounds(touch.clientX, touch.clientY)) {
+      return;
+    }
       
       // 핀치 중이 아니면 일반 터치 처리
       if (!isPinching) {
-        const mouseEvent = new MouseEvent('mousedown', {
-          clientX: touch.clientX,
-          clientY: touch.clientY
-        });
-        handleMouseDown(mouseEvent);
+    const mouseEvent = new MouseEvent('mousedown', {
+      clientX: touch.clientX,
+      clientY: touch.clientY
+    });
+    handleMouseDown(mouseEvent);
       }
     }
-  };
+  }, [zoom, isPinching, handleMouseDown, isPointInImageBounds]);
 
-  const handleTouchMove = (e) => {
+  const handleTouchMove = useCallback((e) => {
     e.preventDefault();
     
     const touches = Array.from(e.touches);
@@ -899,15 +1312,15 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
     // 한 개의 터치 포인트만 있고 핀치 중이 아니면 일반 터치 처리
     if (touches.length === 1 && !isPinching) {
       const touch = touches[0];
-      const mouseEvent = new MouseEvent('mousemove', {
-        clientX: touch.clientX,
-        clientY: touch.clientY
-      });
-      handleMouseMove(mouseEvent);
+    const mouseEvent = new MouseEvent('mousemove', {
+      clientX: touch.clientX,
+      clientY: touch.clientY
+    });
+    handleMouseMove(mouseEvent);
     }
-  };
+  }, [isPinching, pinchStartDistance, pinchStartZoom, pinchCenter, panOffset, handleMouseMove]);
 
-  const handleTouchEnd = (e) => {
+  const handleTouchEnd = useCallback((e) => {
     e.preventDefault();
     
     const touches = Array.from(e.touches);
@@ -923,9 +1336,9 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
 
     // 모든 터치가 끝나면 일반 터치 종료
     if (touches.length === 0) {
-      handleMouseUp();
+    handleMouseUp();
     }
-  };
+  }, [isPinching, handleMouseUp]);
 
   // 전체 지우기
   const handleClear = () => {
@@ -940,7 +1353,11 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
 
   // 마우스 휠로 줌
   const handleWheel = (e) => {
-    e.preventDefault();
+    // passive 이벤트 리스너에서는 preventDefault를 호출할 수 없으므로
+    // 이벤트가 기본 동작을 하지 않도록 처리
+    if (e.cancelable) {
+      e.preventDefault();
+    }
     const delta = e.deltaY > 0 ? -0.1 : 0.1;
     setZoom(prev => Math.max(0.5, Math.min(3, prev + delta)));
   };
@@ -979,11 +1396,79 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
         answer: a.answer.trim()
       }));
 
-      const response = await post(`/api/assignments/${assignment._id}/submit`, {
-        studentAnswers: studentAnswers
-      });
+      // 풀이 이미지들을 base64로 변환
+      const solutionImages = [];
+      const drawingCanvas = drawingCanvasRef.current;
+      
+      // 현재 이미지의 풀이를 먼저 저장
+      if (drawingCanvas) {
+        saveDrawing();
+      }
+      
+      if (images.length > 0) {
+        // 각 이미지에 대한 풀이를 localStorage에서 가져오기
+        for (let i = 0; i < images.length; i++) {
+          let drawingData = null;
+          
+          // 현재 이미지인 경우 drawingCanvas에서 직접 가져오기
+          if (i === currentImageIndex && drawingCanvas) {
+            drawingData = drawingCanvas.toDataURL('image/png');
+          } else {
+            // 다른 이미지의 풀이는 localStorage에서 가져오기
+            const drawingKey = `assignment_${assignment._id}_student_${studentId}_image_${i}`;
+            drawingData = localStorage.getItem(drawingKey);
+          }
+          
+          if (drawingData && drawingData.startsWith('data:image')) {
+            solutionImages.push(drawingData);
+          } else {
+            // 풀이가 없는 경우 빈 캔버스 생성
+            const canvas = document.createElement('canvas');
+            canvas.width = 800;
+            canvas.height = 1000;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            solutionImages.push(canvas.toDataURL('image/png'));
+          }
+        }
+      } else if (drawingCanvas) {
+        // 이미지가 없는 경우 (빈 캔버스)
+        const emptyKey = `assignment_${assignment._id}_student_${studentId}_image_empty`;
+        const emptyData = localStorage.getItem(emptyKey);
+        
+        if (emptyData && emptyData.startsWith('data:image')) {
+          solutionImages.push(emptyData);
+        } else {
+          // 현재 그리기 캔버스의 내용을 가져오기
+          const dataURL = drawingCanvas.toDataURL('image/png');
+          solutionImages.push(dataURL);
+        }
+      }
 
-      const data = await response.json();
+      // solutionImages 크기 확인 및 로깅
+      const filteredSolutionImages = solutionImages.filter(img => img !== null);
+      console.log(`제출할 풀이 이미지 개수: ${filteredSolutionImages.length}`);
+      if (filteredSolutionImages.length > 0) {
+        const totalSizeKB = filteredSolutionImages.reduce((sum, img) => sum + (img.length / 1024), 0);
+        console.log(`총 풀이 이미지 크기: ${Math.round(totalSizeKB)}KB`);
+      }
+
+      let response;
+      let data;
+      
+      try {
+        response = await post(`/api/assignments/${assignment._id}/submit`, {
+            studentAnswers: studentAnswers,
+            solutionImages: filteredSolutionImages
+        });
+
+        data = await response.json();
+      } catch (fetchError) {
+        console.error('요청 전송 실패:', fetchError);
+        throw new Error('서버에 연결할 수 없습니다. 네트워크를 확인해주세요.');
+      }
+
       if (response.ok && data.success) {
         const totalQuestions = assignment.questionCount || answers.length;
         const correctCount = data.data.correctCount || 0;
@@ -1054,7 +1539,26 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
       }
     } catch (error) {
       console.error('정답 제출 오류:', error);
-      alert('정답 제출에 실패했습니다: ' + (error.message || '알 수 없는 오류'));
+      console.error('에러 상세:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
+      
+      // 응답이 있는 경우 에러 메시지 추출
+      let errorMessage = '알 수 없는 오류가 발생했습니다.';
+      if (error.response) {
+        try {
+          const errorData = await error.response.json();
+          errorMessage = errorData.message || errorData.error || errorMessage;
+        } catch (e) {
+          errorMessage = error.response.statusText || errorMessage;
+        }
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      alert(`정답 제출에 실패했습니다: ${errorMessage}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -1076,13 +1580,103 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
     <div className="assignment-detail">
       <header className="assignment-detail-header">
         <div className="assignment-detail-header-content">
-          <button onClick={onBack} className="btn-back-header">
-            ← 돌아가기
+          <button onClick={onBack} className="btn-back-header" title="돌아가기">
+            ×
           </button>
           <h2 className="assignment-detail-title">{assignment.assignmentName}</h2>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <button
-            onClick={() => setShowAnswerPanel(!showAnswerPanel)}
+            onClick={async () => {
+              // 정답 패널을 열 때 assignment의 최신 정보 가져오기 (answers 포함)
+              if (!showAnswerPanel && assignment?._id) {
+                setIsLoadingAssignment(true);
+                try {
+                  const response = await get(`/api/assignments/${assignment._id}`);
+                  const data = await response.json();
+                  if (data.success && data.data) {
+                    console.log('정답 버튼 클릭 - 받은 데이터:', {
+                      hasAnswers: !!data.data.answers,
+                      answersCount: data.data.answers?.length,
+                      answers: data.data.answers,
+                      hasSubmissions: !!data.data.submissions,
+                      submissionsCount: data.data.submissions?.length,
+                      fullData: data.data
+                    });
+                    
+                    // 정답이 없으면 경고 및 상세 정보 출력
+                    if (!data.data.answers || data.data.answers.length === 0) {
+                      console.error('정답 버튼 클릭 - 정답이 없습니다!', {
+                        assignmentId: assignment._id,
+                        assignmentData: data.data,
+                        user: user,
+                        isSubmitted: isSubmitted,
+                        hasSubmissions: !!data.data.submissions,
+                        submissions: data.data.submissions
+                      });
+                      alert('경고: 정답 정보를 불러올 수 없습니다. 관리자에게 문의하세요.');
+                    } else {
+                      console.log('정답 버튼 클릭 - 정답 확인:', {
+                        answersCount: data.data.answers.length,
+                        answers: data.data.answers.map(a => ({
+                          questionNumber: a.questionNumber,
+                          answer: a.answer,
+                          score: a.score
+                        }))
+                      });
+                    }
+                    
+                    // currentAssignment 업데이트
+                    setCurrentAssignment(data.data);
+                    if (onAssignmentUpdate) {
+                      onAssignmentUpdate(data.data);
+                    }
+                    
+                    // 제출된 답안 즉시 설정
+                    if (data.data.submissions && user) {
+                      const submission = data.data.submissions.find(
+                        sub => {
+                          const subStudentId = sub.studentId?._id || sub.studentId;
+                          const userId = user._id;
+                          return subStudentId && userId && String(subStudentId) === String(userId);
+                        }
+                      );
+                      
+                      if (submission && submission.studentAnswers && Array.isArray(submission.studentAnswers)) {
+                        const questionCount = Number(data.data.questionCount) || submission.studentAnswers.length;
+                        const submittedAnswers = [];
+                        
+                        // 문항 번호 순서대로 정렬
+                        const sortedAnswers = [...submission.studentAnswers].sort((a, b) => {
+                          const numA = Number(a.questionNumber) || 0;
+                          const numB = Number(b.questionNumber) || 0;
+                          return numA - numB;
+                        });
+                        
+                        // 모든 문항에 대해 답안 설정
+                        for (let i = 1; i <= questionCount; i++) {
+                          const submittedAnswer = sortedAnswers.find(sa => 
+                            Number(sa.questionNumber) === i || String(sa.questionNumber) === String(i)
+                          );
+                          submittedAnswers.push({
+                            questionNumber: i,
+                            answer: submittedAnswer?.answer || '',
+                            score: 1
+                          });
+                        }
+                        
+                        console.log('정답 버튼 클릭 - 설정할 답안:', submittedAnswers);
+                        setAnswers(submittedAnswers);
+                      }
+                    }
+                  }
+                } catch (error) {
+                  console.error('과제 정보 가져오기 오류:', error);
+                } finally {
+                  setIsLoadingAssignment(false);
+                }
+              }
+              setShowAnswerPanel(!showAnswerPanel);
+            }}
             className="btn-answer"
           >
             정답
@@ -1107,10 +1701,15 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
             </button>
             <button 
               onClick={handleUndo} 
-              className="zoom-reset-btn"
-              disabled={!hasChanges}
+              className="zoom-reset-btn undo-btn"
+              disabled={drawingHistory.length === 0 && !hasChanges}
+              title="마지막 작업 취소"
             >
-              돌아가기
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 7v6h6"/>
+                <path d="M21 17a9 9 0 0 1-9-9 9 9 0 0 1 6 2.3L21 7"/>
+                <path d="M21 7v6h-6"/>
+              </svg>
             </button>
           <button onClick={handleClear} className="btn-clear">
             전체 지우기
@@ -1136,13 +1735,13 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
               }}
             >
               {images.length > 0 && (
-                <img
-                  ref={imageRef}
-                  src={images[currentImageIndex]}
-                  alt={`과제 이미지 ${currentImageIndex + 1}`}
-                  className="assignment-image"
-                  style={{ display: 'none' }}
-                />
+              <img
+                ref={imageRef}
+                src={images[currentImageIndex]}
+                alt={`과제 이미지 ${currentImageIndex + 1}`}
+                className="assignment-image"
+                style={{ display: 'none' }}
+              />
               )}
               <canvas
                 ref={canvasRef}
@@ -1156,10 +1755,6 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
                 onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUp}
                 onMouseLeave={handleMouseUp}
-                onTouchStart={handleTouchStart}
-                onTouchMove={handleTouchMove}
-                onTouchEnd={handleTouchEnd}
-                onTouchCancel={handleTouchEnd}
                 style={{ 
                   touchAction: 'none',
                   userSelect: 'none',
@@ -1277,22 +1872,161 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
               </div>
             </div>
           )}
+          {isLoadingAssignment ? (
+            <div style={{ padding: '20px', textAlign: 'center', color: '#666' }}>
+              정답 정보를 불러오는 중...
+            </div>
+          ) : (
           <div className="answer-list">
-            {answers.map((answer) => (
-              <div key={answer.questionNumber} className="answer-item">
-                <span className="answer-label">{answer.questionNumber}번</span>
-                <input
-                  type="text"
-                  className="answer-input"
-                  value={answer.answer}
-                  onChange={(e) => handleAnswerChange(answer.questionNumber, e.target.value)}
-                  placeholder="답"
-                  readOnly={isSubmitted}
-                  disabled={isSubmitted}
-                />
+            {answers.length === 0 ? (
+              <div style={{ padding: '20px', textAlign: 'center', color: '#666' }}>
+                답안이 없습니다.
               </div>
-            ))}
+            ) : (
+              answers.map((answer) => {
+                // 정답 찾기 - currentAssignment 우선 사용
+                let correctAnswer = null;
+                const assignmentToUse = currentAssignment || assignment;
+                
+                console.log(`문제 ${answer.questionNumber} - 정답 찾기:`, {
+                  hasCurrentAssignment: !!currentAssignment,
+                  hasAssignment: !!assignment,
+                  hasAnswers: !!assignmentToUse?.answers,
+                  answersCount: assignmentToUse?.answers?.length,
+                  answers: assignmentToUse?.answers
+                });
+                
+                if (assignmentToUse?.answers && Array.isArray(assignmentToUse.answers)) {
+                  // 여러 방법으로 정답 찾기 시도
+                  correctAnswer = assignmentToUse.answers.find(
+                    a => {
+                      // 방법 1: 숫자로 직접 비교
+                      const aNum = Number(a.questionNumber);
+                      const answerNum = Number(answer.questionNumber);
+                      if (aNum === answerNum) return true;
+                      
+                      // 방법 2: 문자열로 비교
+                      if (String(a.questionNumber) === String(answer.questionNumber)) return true;
+                      
+                      // 방법 3: 공백 제거 후 비교
+                      if (String(a.questionNumber).trim() === String(answer.questionNumber).trim()) return true;
+                      
+                      return false;
+                    }
+                  );
+                  
+                  // 정답을 찾지 못한 경우 상세 로그
+                  if (!correctAnswer && isSubmitted) {
+                    console.error(`문제 ${answer.questionNumber} - 정답을 찾을 수 없습니다!`, {
+                      questionNumber: answer.questionNumber,
+                      questionNumberType: typeof answer.questionNumber,
+                      availableAnswers: assignmentToUse.answers.map(a => ({
+                        questionNumber: a.questionNumber,
+                        questionNumberType: typeof a.questionNumber,
+                        answer: a.answer
+                      })),
+                      hasCurrentAssignment: !!currentAssignment,
+                      hasAssignment: !!assignment
+                    });
+                  } else if (correctAnswer) {
+                    console.log(`문제 ${answer.questionNumber} 정답 찾음:`, correctAnswer);
+                  }
+                } else if (isSubmitted) {
+                  console.error(`문제 ${answer.questionNumber} - answers 배열이 없습니다!`, {
+                    hasAssignmentToUse: !!assignmentToUse,
+                    hasAnswers: !!assignmentToUse?.answers,
+                    answersType: typeof assignmentToUse?.answers,
+                    isArray: Array.isArray(assignmentToUse?.answers)
+                  });
+                }
+                
+                const correctAnswerText = correctAnswer?.answer ? String(correctAnswer.answer).trim() : '';
+                const studentAnswerText = answer.answer ? String(answer.answer).trim() : '';
+                
+                console.log(`문제 ${answer.questionNumber} - 답안 비교:`, {
+                  isSubmitted,
+                  correctAnswerText,
+                  studentAnswerText,
+                  hasCorrectAnswer: !!correctAnswer
+                });
+                
+                // 맞음/틀림 판단 (제출된 경우만)
+                let isCorrect = false;
+                let isWrong = false;
+                
+                if (isSubmitted && correctAnswerText) {
+                  if (studentAnswerText) {
+                    // 정답과 학생 답안을 공백 제거 후 소문자로 비교
+                    const normalizedCorrect = correctAnswerText.toLowerCase();
+                    const normalizedStudent = studentAnswerText.toLowerCase();
+                    isCorrect = normalizedCorrect === normalizedStudent;
+                    isWrong = !isCorrect;
+                  } else {
+                    // 정답은 있는데 학생이 답을 안 쓴 경우
+                    isWrong = true;
+                  }
+                } else if (isSubmitted && !correctAnswerText) {
+                  // 제출은 했지만 정답이 없는 경우 (정답이 설정되지 않은 문제)
+                  console.warn(`문제 ${answer.questionNumber} - 정답이 없습니다`);
+                }
+                
+                // 제출된 경우 정답 표시 (정답이 있는 경우만)
+                const shouldShowAnswer = isSubmitted && correctAnswerText;
+                
+                console.log(`문제 ${answer.questionNumber} - 최종 결과:`, {
+                  isCorrect,
+                  isWrong,
+                  shouldShowAnswer,
+                  correctAnswerText,
+                  studentAnswerText,
+                  hasCorrectAnswer: !!correctAnswer,
+                  assignmentAnswers: assignmentToUse?.answers,
+                  assignmentToUseAnswersCount: assignmentToUse?.answers?.length
+                });
+                
+                // 정답이 없는데 제출된 경우 경고
+                if (isSubmitted && !correctAnswerText) {
+                  console.error(`문제 ${answer.questionNumber} - 정답을 찾을 수 없습니다!`, {
+                    hasCurrentAssignment: !!currentAssignment,
+                    hasAssignment: !!assignment,
+                    assignmentToUseAnswers: assignmentToUse?.answers,
+                    questionNumber: answer.questionNumber
+                  });
+                }
+                
+                return (
+                  <div key={answer.questionNumber} className={`answer-item ${isCorrect ? 'answer-correct' : isWrong ? 'answer-wrong' : ''}`}>
+                    <div className="answer-item-header">
+                      <span className="answer-label">{answer.questionNumber}번</span>
+                      {shouldShowAnswer && (
+                        <span className={`answer-status ${isCorrect ? 'status-correct' : 'status-wrong'}`}>
+                          {isCorrect ? '✓ 정답' : '✗ 오답'}
+                        </span>
+                      )}
+                    </div>
+                    <div className="answer-input-container">
+                      <input
+                        type="text"
+                        className="answer-input"
+                        value={studentAnswerText}
+                        onChange={(e) => handleAnswerChange(answer.questionNumber, e.target.value)}
+                        placeholder="답"
+                        readOnly={isSubmitted}
+                        disabled={isSubmitted}
+                      />
+                      {shouldShowAnswer && (
+                        <div className="correct-answer-display">
+                          <span className="correct-answer-label">정답:</span>
+                          <span className="correct-answer-text">{correctAnswerText}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
+          )}
           {!isSubmitted && (
           <div className="answer-panel-footer">
             <button

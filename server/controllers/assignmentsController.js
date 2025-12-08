@@ -1,5 +1,5 @@
 const Assignment = require('../models/Assignment');
-const { deleteFile } = require('../utils/cloudinary');
+const { deleteFile, cloudinary } = require('../utils/cloudinary');
 
 // GET /api/assignments - 모든 과제 조회 (페이지네이션 지원)
 const getAllAssignments = async (req, res) => {
@@ -37,7 +37,8 @@ const getAllAssignments = async (req, res) => {
 // GET /api/assignments/:id - 특정 과제 조회
 const getAssignmentById = async (req, res) => {
   try {
-    const assignment = await Assignment.findById(req.params.id);
+    const assignment = await Assignment.findById(req.params.id)
+      .populate('submissions.studentId', 'name email');
 
     if (!assignment) {
       return res.status(404).json({
@@ -47,13 +48,128 @@ const getAssignmentById = async (req, res) => {
     }
 
     // 학생인 경우 정답(answers) 제외
+    // 단, 제출된 과제인 경우 정답 포함 (정답 확인을 위해)
     // req.user가 있으면 (인증된 경우) 역할 확인, 없으면 정답 제외 (안전을 위해)
     const user = req.user;
     const isStudent = !user || (user.role === 'student' || !user.role);
     
+    console.log('[getAssignmentById] 사용자 정보 확인:', {
+      hasUser: !!user,
+      userId: user?._id,
+      userRole: user?.role,
+      isStudent: isStudent
+    });
+    
     const assignmentData = assignment.toObject();
-    if (isStudent) {
+    
+    // 디버깅 로그
+    console.log('[getAssignmentById] assignment 데이터:', {
+      assignmentId: assignment._id,
+      hasAnswers: !!assignmentData.answers,
+      answersCount: assignmentData.answers?.length,
+      hasSubmissions: !!assignmentData.submissions,
+      submissionsCount: assignmentData.submissions?.length,
+      submissions: assignmentData.submissions?.map(sub => ({
+        studentId: sub.studentId?._id || sub.studentId,
+        hasStudentAnswers: !!sub.studentAnswers,
+        studentAnswersCount: sub.studentAnswers?.length,
+        studentAnswers: sub.studentAnswers
+      })),
+      user: user ? { _id: user._id, role: user.role } : null
+    });
+    
+    // 학생인 경우
+    if (isStudent && user) {
+      // 제출 여부 확인
+      const hasSubmission = assignment.submissions && assignment.submissions.some(
+        sub => {
+          const subStudentId = sub.studentId?._id || sub.studentId;
+          const userId = user._id;
+          return subStudentId && userId && String(subStudentId) === String(userId);
+        }
+      );
+      
+      console.log('[getAssignmentById] 제출 여부 확인:', {
+        hasSubmission,
+        userId: user._id,
+        hasAnswers: !!assignmentData.answers,
+        answersCount: assignmentData.answers?.length,
+        submissions: assignment.submissions?.map(sub => ({
+          studentId: sub.studentId?._id || sub.studentId,
+          hasStudentAnswers: !!sub.studentAnswers,
+          studentAnswers: sub.studentAnswers
+        }))
+      });
+      
+      // 제출하지 않은 경우에만 정답 제외
+      if (!hasSubmission) {
+        console.log('[getAssignmentById] 제출하지 않음 - 정답 제외');
+        delete assignmentData.answers;
+      } else {
+        // 제출한 경우 정답 포함 (정답 확인을 위해)
+        // assignmentData.answers가 없으면 원본 assignment에서 가져오기
+        if (!assignmentData.answers || assignmentData.answers.length === 0) {
+          if (assignment.answers && assignment.answers.length > 0) {
+            console.log('[getAssignmentById] assignmentData에 정답이 없어서 원본에서 가져옵니다:', {
+              answersCount: assignment.answers.length,
+              answers: assignment.answers
+            });
+            assignmentData.answers = assignment.answers;
+          }
+        }
+        console.log('[getAssignmentById] 제출함 - 정답 포함:', {
+          hasAnswers: !!assignmentData.answers,
+          answersCount: assignmentData.answers?.length,
+          answers: assignmentData.answers
+        });
+      }
+    } else if (isStudent && !user) {
+      // 인증되지 않은 경우 정답 제외
+      console.log('[getAssignmentById] 인증되지 않음 - 정답 제외');
       delete assignmentData.answers;
+    } else {
+      // 관리자나 강사인 경우 정답 포함
+      console.log('[getAssignmentById] 관리자/강사 - 정답 포함:', {
+        hasAnswers: !!assignmentData.answers,
+        answersCount: assignmentData.answers?.length
+      });
+    }
+
+    console.log('[getAssignmentById] 최종 반환 데이터:', {
+      hasAnswers: !!assignmentData.answers,
+      answersCount: assignmentData.answers?.length,
+      answers: assignmentData.answers, // 정답 내용도 로그에 포함
+      hasSubmissions: !!assignmentData.submissions,
+      submissionsCount: assignmentData.submissions?.length,
+      isStudent: isStudent,
+      hasUser: !!user,
+      userRole: user?.role
+    });
+
+    // 최종 확인: 제출된 과제인데 정답이 없으면 경고
+    if (isStudent && user && assignmentData.submissions && assignmentData.submissions.some(
+      sub => {
+        const subStudentId = sub.studentId?._id || sub.studentId;
+        return subStudentId && String(subStudentId) === String(user._id);
+      }
+    ) && (!assignmentData.answers || assignmentData.answers.length === 0)) {
+      console.error('[getAssignmentById] 경고: 제출된 과제인데 정답이 없습니다!', {
+        assignmentId: assignment._id,
+        userId: user._id,
+        assignmentHasAnswers: !!assignment.answers,
+        assignmentAnswersCount: assignment.answers?.length,
+        assignmentDataHasAnswers: !!assignmentData.answers,
+        assignmentDataAnswersCount: assignmentData.answers?.length
+      });
+      
+      // 원본 assignment에 정답이 있으면 포함
+      if (assignment.answers && assignment.answers.length > 0) {
+        console.log('[getAssignmentById] 원본 assignment에 정답이 있음, 포함합니다:', {
+          answersCount: assignment.answers.length,
+          answers: assignment.answers
+        });
+        assignmentData.answers = assignment.answers;
+      }
     }
 
     res.json({
@@ -93,10 +209,10 @@ const createAssignment = async (req, res) => {
     }
 
     // 과제 타입 검증
-    if (!['QUIZ', '실전TEST'].includes(assignmentType)) {
+    if (!['QUIZ', '클리닉'].includes(assignmentType)) {
       return res.status(400).json({
         success: false,
-        message: '과제 타입은 QUIZ 또는 실전TEST여야 합니다'
+        message: '과제 타입은 QUIZ 또는 클리닉이어야 합니다'
       });
     }
 
@@ -183,10 +299,10 @@ const updateAssignment = async (req, res) => {
       updateData.questionCount = questionCount;
     }
     if (assignmentType) {
-      if (!['QUIZ', '실전TEST'].includes(assignmentType)) {
+      if (!['QUIZ', '클리닉'].includes(assignmentType)) {
         return res.status(400).json({
           success: false,
-          message: '과제 타입은 QUIZ 또는 실전TEST여야 합니다'
+          message: '과제 타입은 QUIZ 또는 클리닉이어야 합니다'
         });
       }
       updateData.assignmentType = assignmentType;
@@ -361,11 +477,14 @@ const deleteAssignment = async (req, res) => {
       });
     }
 
-    // Cloudinary에 업로드된 파일 삭제
-    const fileUrls = Array.isArray(assignment.fileUrl) ? assignment.fileUrl : (assignment.fileUrl ? [assignment.fileUrl] : []);
-    const fileTypes = Array.isArray(assignment.fileType) ? assignment.fileType : (assignment.fileType ? [assignment.fileType] : []);
     const deletePromises = [];
 
+    // 1. 과제의 원본 파일(문제지) 삭제
+    const fileUrls = Array.isArray(assignment.fileUrl) ? assignment.fileUrl : (assignment.fileUrl ? [assignment.fileUrl] : []);
+    const fileTypes = Array.isArray(assignment.fileType) ? assignment.fileType : (assignment.fileType ? [assignment.fileType] : []);
+
+    console.log(`[과제 삭제] 과제 ${req.params.id}의 원본 파일 ${fileUrls.length}개 삭제 시작...`);
+    
     for (let i = 0; i < fileUrls.length; i++) {
       const fileUrl = fileUrls[i];
       const fileType = fileTypes[i] || 'image'; // 기본값은 image
@@ -380,20 +499,52 @@ const deleteAssignment = async (req, res) => {
           deletePromises.push(
             deleteFile(urlInfo.publicId, resourceType).catch(error => {
               // 개별 파일 삭제 실패는 로그만 남기고 계속 진행
-              console.error(`Cloudinary 파일 삭제 실패 (public_id: ${urlInfo.publicId}, resource_type: ${resourceType}):`, error.message);
+              console.error(`[과제 삭제] 원본 파일 삭제 실패 (public_id: ${urlInfo.publicId}, resource_type: ${resourceType}):`, error.message);
               return null; // 에러를 throw하지 않고 null 반환
             })
           );
         } else {
-          console.warn(`Cloudinary URL에서 public_id를 추출할 수 없습니다: ${fileUrl}`);
+          console.warn(`[과제 삭제] Cloudinary URL에서 public_id를 추출할 수 없습니다: ${fileUrl}`);
+        }
+      }
+    }
+
+    // 2. 모든 학생 풀이 이미지 삭제
+    if (assignment.submissions && Array.isArray(assignment.submissions) && assignment.submissions.length > 0) {
+      console.log(`[과제 삭제] 학생 제출 ${assignment.submissions.length}개의 풀이 이미지 삭제 시작...`);
+      
+      for (const submission of assignment.submissions) {
+        if (submission.solutionImages && Array.isArray(submission.solutionImages) && submission.solutionImages.length > 0) {
+          console.log(`[과제 삭제] 학생 ${submission.studentId}의 풀이 이미지 ${submission.solutionImages.length}개 삭제 중...`);
+          
+          for (const solutionImageUrl of submission.solutionImages) {
+            if (solutionImageUrl) {
+              const urlInfo = extractPublicIdFromUrl(solutionImageUrl);
+              if (urlInfo && urlInfo.publicId) {
+                // 풀이 이미지는 항상 image 타입
+                deletePromises.push(
+                  deleteFile(urlInfo.publicId, urlInfo.resourceType || 'image').catch(error => {
+                    // 개별 파일 삭제 실패는 로그만 남기고 계속 진행
+                    console.error(`[과제 삭제] 학생 풀이 이미지 삭제 실패 (public_id: ${urlInfo.publicId}):`, error.message);
+                    return null; // 에러를 throw하지 않고 null 반환
+                  })
+                );
+              } else {
+                console.warn(`[과제 삭제] 학생 풀이 이미지 URL에서 public_id를 추출할 수 없습니다: ${solutionImageUrl}`);
+              }
+            }
+          }
         }
       }
     }
 
     // 모든 파일 삭제 시도 (일부 실패해도 계속 진행)
     if (deletePromises.length > 0) {
+      console.log(`[과제 삭제] 총 ${deletePromises.length}개의 Cloudinary 파일 삭제 시도 중...`);
       await Promise.all(deletePromises);
-      console.log(`${deletePromises.length}개의 Cloudinary 파일 삭제 시도 완료`);
+      console.log(`[과제 삭제] ${deletePromises.length}개의 Cloudinary 파일 삭제 시도 완료`);
+    } else {
+      console.log(`[과제 삭제] 삭제할 Cloudinary 파일이 없습니다.`);
     }
 
     // 과제 삭제
@@ -417,7 +568,7 @@ const deleteAssignment = async (req, res) => {
 const submitAnswers = async (req, res) => {
   try {
     const { id } = req.params;
-    const { studentAnswers } = req.body;
+    const { studentAnswers, solutionImages } = req.body; // solutionImages: base64 이미지 배열
     const studentId = req.user._id; // 인증된 사용자 ID
 
     if (!studentId) {
@@ -480,12 +631,75 @@ const submitAnswers = async (req, res) => {
       sub => sub.studentId.toString() === studentId.toString()
     );
 
+    // 풀이 이미지를 Cloudinary에 업로드
+    let solutionImageUrls = [];
+    if (solutionImages && Array.isArray(solutionImages) && solutionImages.length > 0) {
+      console.log(`풀이 이미지 업로드 시작: ${solutionImages.length}개 이미지`);
+      
+      try {
+        // 기존 풀이 이미지가 있으면 삭제
+        if (existingSubmissionIndex >= 0 && assignment.submissions[existingSubmissionIndex].solutionImages) {
+          console.log('기존 풀이 이미지 삭제 시작');
+          for (const oldImageUrl of assignment.submissions[existingSubmissionIndex].solutionImages) {
+            try {
+              const publicIdInfo = extractPublicIdFromUrl(oldImageUrl);
+              if (publicIdInfo && publicIdInfo.publicId) {
+                await deleteFile(publicIdInfo.publicId, publicIdInfo.resourceType);
+                console.log(`기존 이미지 삭제 완료: ${publicIdInfo.publicId}`);
+              }
+            } catch (deleteError) {
+              console.error('기존 풀이 이미지 삭제 실패:', deleteError.message);
+              // 삭제 실패해도 계속 진행
+            }
+          }
+        }
+
+        // 새 풀이 이미지 업로드
+        for (let i = 0; i < solutionImages.length; i++) {
+          const base64Image = solutionImages[i];
+          if (base64Image && base64Image.startsWith('data:image')) {
+            try {
+              // base64 이미지 크기 확인 (디버깅용)
+              const imageSizeKB = Math.round(base64Image.length / 1024);
+              console.log(`풀이 이미지 ${i} 업로드 시작 (크기: ${imageSizeKB}KB)`);
+              
+              // base64를 Cloudinary에 업로드
+              const uploadResult = await cloudinary.uploader.upload(base64Image, {
+                folder: `assignments/${id}/solutions/${studentId}`,
+                resource_type: 'image',
+                public_id: `solution_${i}_${Date.now()}`,
+                overwrite: false
+              });
+              
+              solutionImageUrls.push(uploadResult.secure_url);
+              console.log(`풀이 이미지 ${i} 업로드 완료: ${uploadResult.secure_url.substring(0, 50)}...`);
+            } catch (uploadError) {
+              console.error(`풀이 이미지 ${i} 업로드 실패:`, uploadError.message || uploadError);
+              console.error('업로드 에러 상세:', JSON.stringify(uploadError, null, 2));
+              // 업로드 실패해도 계속 진행 (답안 제출은 성공)
+            }
+          } else {
+            console.warn(`풀이 이미지 ${i}가 유효한 base64 형식이 아닙니다.`);
+          }
+        }
+        
+        console.log(`풀이 이미지 업로드 완료: ${solutionImageUrls.length}/${solutionImages.length}개 성공`);
+      } catch (error) {
+        console.error('풀이 이미지 업로드 중 예상치 못한 오류:', error.message || error);
+        console.error('에러 스택:', error.stack);
+        // 이미지 업로드 실패해도 답안 제출은 계속 진행
+      }
+    } else {
+      console.log('풀이 이미지가 없습니다.');
+    }
+
     const submissionData = {
       studentId,
       studentAnswers,
       correctCount,
       wrongCount,
-      submittedAt: new Date()
+      submittedAt: new Date(),
+      solutionImages: solutionImageUrls
     };
 
     if (existingSubmissionIndex >= 0) {
@@ -509,10 +723,15 @@ const submitAnswers = async (req, res) => {
     });
   } catch (error) {
     console.error('답안 제출 오류:', error);
+    console.error('에러 상세:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
     res.status(500).json({
       success: false,
       message: '답안 제출 실패',
-      error: error.message
+      error: error.message || '알 수 없는 오류가 발생했습니다.'
     });
   }
 };
