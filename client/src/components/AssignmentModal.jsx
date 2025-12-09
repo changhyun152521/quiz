@@ -2,10 +2,104 @@ import { useState, useEffect } from 'react';
 import { get, post } from '../utils/api';
 import './AssignmentModal.css';
 
+// 과목별 대단원/소단원 데이터
+const subjectUnits = {
+  '중1-1': [
+    { mainUnit: '수와 연산', subUnits: ['소인수분해', '최대공약수와 최소공배수'] },
+    { mainUnit: '정수와 유리수', subUnits: ['정수와 유리수', '정수와 유리수의 계산'] },
+    { mainUnit: '문자와 식', subUnits: ['문자의 사용과 식의 계산', '일차방정식', '일차방정식의 활용'] },
+    { mainUnit: '좌표평면과 그래프', subUnits: ['좌표평면과 그래프', '정비례와 반비례'] }
+  ],
+  '중1-2': [
+    { mainUnit: '기본 도형과 작도', subUnits: ['기본 도형', '위치 관계', '작도와 합동'] },
+    { mainUnit: '평면도형의 성질', subUnits: ['다각형', '원과 부채꼴'] },
+    { mainUnit: '입체도형의 성질', subUnits: ['다면체와 회전체', '입체도형의 겉넓이와 부피'] },
+    { mainUnit: '자료의 정리와 해석', subUnits: ['자료의 정리와 해석'] }
+  ],
+  '중2-1': [
+    { mainUnit: '수와 식', subUnits: ['유리수와 순환소수', '식의 계산'] },
+    { mainUnit: '부등식', subUnits: ['일차부등식', '일차부등식의 활용'] },
+    { mainUnit: '방정식', subUnits: ['연립일차방정식', '연립방정식의 풀이', '연립방정식의 활용'] },
+    { mainUnit: '함수', subUnits: ['일차함수와 그래프(1)', '일차함수와 그래프(2)', '일차함수와 일차방정식의 관계'] }
+  ],
+  '중2-2': [
+    { mainUnit: '도형의 성질', subUnits: ['삼각형의 성질', '사각형의 성질'] },
+    { mainUnit: '도형의 닮음', subUnits: ['도형의 닮음', '닮은 도형의 성질', '피타고라스 정리'] },
+    { mainUnit: '확률', subUnits: ['경우의 수와 확률'] }
+  ],
+  '중3-1': [
+    { mainUnit: '실수와 그 계산', subUnits: ['제곱근과 실수', '근호를 포함한 식의 계산'] },
+    { mainUnit: '다항식의 곱셈과 인수분해', subUnits: ['다항식의 곱셈', '다항식의 인수분해'] },
+    { mainUnit: '이차방정식', subUnits: ['이차방정식의 풀이', '이차방정식의 활용'] },
+    { mainUnit: '이차함수', subUnits: ['이차함수의 그래프', '이차함수의 활용'] }
+  ],
+  '중3-2': [
+    { mainUnit: '삼각비', subUnits: ['삼각비', '삼각비의 활용'] },
+    { mainUnit: '원의 성질', subUnits: ['원과 직선', '원주각', '원주각의 활용'] },
+    { mainUnit: '통계', subUnits: ['대푯값과 산포도', '상관관계'] }
+  ],
+  '공통수학1': [
+    { mainUnit: '다항식', subUnits: ['다항식의 연산', '나머지정리', '인수분해'] },
+    { mainUnit: '방정식과 부등식', subUnits: ['복소수와 이차방정식', '이차방정식과 이차함수', '여러 가지 방정식과 부등식'] },
+    { mainUnit: '경우의 수', subUnits: ['합의 법칙과 곱의 법칙', '순열과 조합'] },
+    { mainUnit: '행렬', subUnits: ['행렬과 그 연산'] }
+  ],
+  '공통수학2': [
+    { mainUnit: '도형의 방정식', subUnits: ['평면좌표', '직선의 방정식', '원의 방정식', '도형의 이동'] },
+    { mainUnit: '집합과 명제', subUnits: ['집합', '명제'] },
+    { mainUnit: '함수와 그래프', subUnits: ['함수', '유무리함수'] }
+  ],
+  '대수': [
+    { mainUnit: '지수함수와 로그함수', subUnits: ['지수와 로그', '지수함수와 로그함수'] },
+    { mainUnit: '삼각함수', subUnits: ['삼각함수', '사인법칙과 코사인법칙'] },
+    { mainUnit: '수열', subUnits: ['등차수열과 등비수열', '수열의 합', '수학적 귀납법'] }
+  ],
+  '미적분1': [
+    { mainUnit: '함수의 극한과 연속', subUnits: ['함수의 극한', '함수의 연속'] },
+    { mainUnit: '미분', subUnits: ['미분계수와 도함수', '도함수의 활용'] },
+    { mainUnit: '적분', subUnits: ['부정적분과 정적분', '정적분의 활용'] }
+  ],
+  '미적분2': [
+    { mainUnit: '수열의 극한', subUnits: ['수열의 극한', '급수'] },
+    { mainUnit: '미분법', subUnits: ['지수함수와 로그함수의 미분', '삼각함수의 미분', '여러가지 미분법', '도함수의 활용'] },
+    { mainUnit: '적분법', subUnits: ['여러가지 함수의 적분', '치환적분과 부분적분법', '정적분의 활용'] }
+  ],
+  '확률과통계': [
+    { mainUnit: '순열과 조합', subUnits: ['순열', '조합'] },
+    { mainUnit: '확률', subUnits: ['확률의 뜻과 활용', '조건부확률'] },
+    { mainUnit: '통계', subUnits: ['확률분포', '통계적추정'] }
+  ],
+  '기하': [
+    { mainUnit: '이차곡선', subUnits: ['포물선, 타원, 쌍곡선', '이차곡선의 접선'] },
+    { mainUnit: '공간도형과 공간좌표', subUnits: ['직선과 평면의 위치관계', '삼수선 정리', '정사영', '좌표공간의 거리 및 내분점', '구의 방정식'] },
+    { mainUnit: '벡터', subUnits: ['벡터의 덧셈, 뺄셈, 실수배', '내적 계산', '평면의 방정식'] }
+  ]
+};
+
+const subjects = Object.keys(subjectUnits);
+
 function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
+  // 여러 과제 추가를 위한 폼 배열 (생성 모드일 때만 사용)
+  const [assignmentForms, setAssignmentForms] = useState([{
+    assignmentName: '',
+    subject: '',
+    mainUnit: '',
+    subUnit: '',
+    questionCount: '',
+    assignmentType: 'QUIZ',
+    startDate: '',
+    dueDate: '',
+    fileUrl: [],
+    fileType: [],
+    answers: []
+  }]);
+  
+  // 단일 과제 폼 (수정 모드 또는 기존 방식)
   const [formData, setFormData] = useState({
     assignmentName: '',
     subject: '',
+    mainUnit: '',
+    subUnit: '',
     questionCount: '',
     assignmentType: 'QUIZ',
     startDate: '',
@@ -14,10 +108,36 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
     fileType: [], // 여러 파일 지원을 위해 배열로 변경
     answers: [] // 정답 배열 추가
   });
+  const [availableMainUnits, setAvailableMainUnits] = useState([]);
+  const [availableSubUnits, setAvailableSubUnits] = useState([]);
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [previewFiles, setPreviewFiles] = useState([]); // 여러 파일 미리보기를 위한 배열
   const [cloudinaryWidget, setCloudinaryWidget] = useState(null);
+  
+  // 각 폼별 대단원/소단원 목록
+  const [formMainUnits, setFormMainUnits] = useState([[]]);
+  const [formSubUnits, setFormSubUnits] = useState([[]]);
+  
+  // 여러 과제 추가를 위한 상태 (생성 모드일 때만 사용)
+  const [multipleForms, setMultipleForms] = useState([{
+    id: 0,
+    assignmentName: '',
+    subject: '',
+    mainUnit: '',
+    subUnit: '',
+    questionCount: '',
+    assignmentType: 'QUIZ',
+    startDate: '',
+    dueDate: '',
+    fileUrl: [],
+    fileType: [],
+    answers: [],
+    previewFiles: [],
+    availableMainUnits: [],
+    availableSubUnits: []
+  }]);
+  const [nextFormId, setNextFormId] = useState(1);
 
   // Cloudinary 위젯 초기화
   useEffect(() => {
@@ -292,11 +412,37 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
           });
         }
 
+        const subject = assignment.subject || '';
+        const mainUnit = assignment.mainUnit || '';
+        const subUnit = assignment.subUnit || '';
+        
+        const assignmentType = assignment.assignmentType || 'QUIZ';
+        
+        // 과목에 따른 대단원/소단원 목록 설정 (QUIZ 타입일 때만)
+        if (assignmentType === 'QUIZ' && subject && subjectUnits[subject]) {
+          setAvailableMainUnits(subjectUnits[subject]);
+          if (mainUnit) {
+            const selectedMainUnit = subjectUnits[subject].find(unit => unit.mainUnit === mainUnit);
+            if (selectedMainUnit) {
+              setAvailableSubUnits(selectedMainUnit.subUnits);
+            } else {
+              setAvailableSubUnits([]);
+            }
+          } else {
+            setAvailableSubUnits([]);
+          }
+        } else {
+          setAvailableMainUnits([]);
+          setAvailableSubUnits([]);
+        }
+        
         setFormData({
           assignmentName: assignment.assignmentName || '',
-          subject: assignment.subject || '',
+          subject: subject,
+          mainUnit: assignmentType === '클리닉' ? '' : mainUnit, // 클리닉이면 대단원 초기화
+          subUnit: assignmentType === '클리닉' ? '' : subUnit, // 클리닉이면 소단원 초기화
           questionCount: assignment.questionCount || '',
-          assignmentType: assignment.assignmentType || 'QUIZ',
+          assignmentType: assignmentType,
           startDate: formatDate(assignment.startDate),
           dueDate: formatDate(assignment.dueDate),
           fileUrl: fileUrls,
@@ -318,6 +464,8 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
         setFormData({
           assignmentName: '',
           subject: '',
+          mainUnit: '',
+          subUnit: '',
           questionCount: '',
           assignmentType: 'QUIZ',
           startDate: '',
@@ -327,6 +475,8 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
           answers: []
         });
         setPreviewFiles([]);
+        setAvailableMainUnits([]);
+        setAvailableSubUnits([]);
       }
       setErrors({});
     }
@@ -334,10 +484,73 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    
+    if (name === 'assignmentType') {
+      // 과제 타입 변경 시 처리
+      setFormData(prev => {
+        const newData = {
+          ...prev,
+          [name]: value
+        };
+        
+        // 클리닉으로 변경 시 대단원과 소단원 초기화
+        if (value === '클리닉') {
+          newData.mainUnit = '';
+          newData.subUnit = '';
+          setAvailableMainUnits([]);
+          setAvailableSubUnits([]);
+        } else if (value === 'QUIZ' && prev.subject) {
+          // QUIZ로 변경하고 과목이 있으면 대단원 목록 설정
+          if (subjectUnits[prev.subject]) {
+            setAvailableMainUnits(subjectUnits[prev.subject]);
+            setAvailableSubUnits([]);
+          }
+        }
+        
+        return newData;
+      });
+    } else if (name === 'subject') {
+      // 과목 변경 시 대단원과 소단원 초기화
+      setFormData(prev => ({
+        ...prev,
+        subject: value,
+        mainUnit: '',
+        subUnit: ''
+      }));
+      
+      // QUIZ 타입일 때만 대단원 목록 설정
+      if (value && formData.assignmentType === 'QUIZ' && subjectUnits[value]) {
+        setAvailableMainUnits(subjectUnits[value]);
+        setAvailableSubUnits([]);
+      } else {
+        setAvailableMainUnits([]);
+        setAvailableSubUnits([]);
+      }
+    } else if (name === 'mainUnit') {
+      // 대단원 변경 시 소단원 초기화
+      setFormData(prev => ({
+        ...prev,
+        mainUnit: value,
+        subUnit: ''
+      }));
+      
+      // 선택된 대단원의 소단원 목록 설정
+      if (value && formData.subject && subjectUnits[formData.subject]) {
+        const selectedMainUnit = subjectUnits[formData.subject].find(unit => unit.mainUnit === value);
+        if (selectedMainUnit) {
+          setAvailableSubUnits(selectedMainUnit.subUnits);
+        } else {
+          setAvailableSubUnits([]);
+        }
+      } else {
+        setAvailableSubUnits([]);
+      }
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name]: value
+      }));
+    }
 
     if (errors[name]) {
       setErrors(prev => ({
@@ -383,9 +596,18 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
     }
 
     if (!formData.subject) {
-      newErrors.subject = '과목을 입력해주세요';
-    } else if (formData.subject.length > 50) {
-      newErrors.subject = '과목은 최대 50자까지 가능합니다';
+      newErrors.subject = '과목을 선택해주세요';
+    }
+    
+    // QUIZ 타입일 때만 대단원과 소단원 필수
+    if (formData.assignmentType === 'QUIZ') {
+      if (!formData.mainUnit) {
+        newErrors.mainUnit = '대단원을 선택해주세요';
+      }
+      
+      if (!formData.subUnit) {
+        newErrors.subUnit = '소단원을 선택해주세요';
+      }
     }
 
     if (!formData.questionCount) {
@@ -488,50 +710,24 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
           <button className="assignment-modal-close" onClick={onClose}>×</button>
         </div>
 
-        <form onSubmit={handleSubmit} className="assignment-modal-form">
+        {mode === 'create' ? (
+          <MultipleAssignmentForm
+            forms={multipleForms}
+            setForms={setMultipleForms}
+            nextFormId={nextFormId}
+            setNextFormId={setNextFormId}
+            onSave={onSave}
+            onClose={onClose}
+            isSubmitting={isSubmitting}
+            setIsSubmitting={setIsSubmitting}
+            subjectUnits={subjectUnits}
+            subjects={subjects}
+            cloudinaryWidget={cloudinaryWidget}
+            setCloudinaryWidget={setCloudinaryWidget}
+          />
+        ) : (
+          <form onSubmit={handleSubmit} className="assignment-modal-form">
           <div className="form-row">
-            <div className="form-group">
-              <label>과제명 *</label>
-              <input
-                type="text"
-                name="assignmentName"
-                value={formData.assignmentName}
-                onChange={handleChange}
-                placeholder="과제명"
-                className={errors.assignmentName ? 'error' : ''}
-              />
-              {errors.assignmentName && <span className="error-message">{errors.assignmentName}</span>}
-            </div>
-
-            <div className="form-group">
-              <label>과목 *</label>
-              <input
-                type="text"
-                name="subject"
-                value={formData.subject}
-                onChange={handleChange}
-                placeholder="과목"
-                className={errors.subject ? 'error' : ''}
-              />
-              {errors.subject && <span className="error-message">{errors.subject}</span>}
-            </div>
-          </div>
-
-          <div className="form-row">
-            <div className="form-group">
-              <label>문항 수 *</label>
-              <input
-                type="number"
-                name="questionCount"
-                value={formData.questionCount}
-                onChange={handleChange}
-                placeholder="문항 수"
-                min="1"
-                className={errors.questionCount ? 'error' : ''}
-              />
-              {errors.questionCount && <span className="error-message">{errors.questionCount}</span>}
-            </div>
-
             <div className="form-group">
               <label>과제 타입 *</label>
               <select
@@ -545,7 +741,90 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
               </select>
               {errors.assignmentType && <span className="error-message">{errors.assignmentType}</span>}
             </div>
+
+            <div className="form-group">
+              <label>과제명 *</label>
+              <input
+                type="text"
+                name="assignmentName"
+                value={formData.assignmentName}
+                onChange={handleChange}
+                placeholder="과제명"
+                className={errors.assignmentName ? 'error' : ''}
+              />
+              {errors.assignmentName && <span className="error-message">{errors.assignmentName}</span>}
+            </div>
           </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label>과목 *</label>
+              <select
+                name="subject"
+                value={formData.subject}
+                onChange={handleChange}
+                className={errors.subject ? 'error' : ''}
+              >
+                <option value="">과목 선택</option>
+                {subjects.map(subject => (
+                  <option key={subject} value={subject}>{subject}</option>
+                ))}
+              </select>
+              {errors.subject && <span className="error-message">{errors.subject}</span>}
+            </div>
+
+            <div className="form-group">
+              <label>문항 수 *</label>
+              <input
+                type="number"
+                name="questionCount"
+                value={formData.questionCount}
+                onChange={handleChange}
+                placeholder="문항 수"
+                min="1"
+                className={errors.questionCount ? 'error' : ''}
+              />
+              {errors.questionCount && <span className="error-message">{errors.questionCount}</span>}
+            </div>
+          </div>
+
+          {formData.assignmentType === 'QUIZ' && (
+            <div className="form-row">
+              <div className="form-group">
+                <label>대단원 *</label>
+                <select
+                  name="mainUnit"
+                  value={formData.mainUnit}
+                  onChange={handleChange}
+                  disabled={!formData.subject}
+                  className={errors.mainUnit ? 'error' : ''}
+                >
+                  <option value="">대단원 선택</option>
+                  {availableMainUnits.map(unit => (
+                    <option key={unit.mainUnit} value={unit.mainUnit}>{unit.mainUnit}</option>
+                  ))}
+                </select>
+                {errors.mainUnit && <span className="error-message">{errors.mainUnit}</span>}
+              </div>
+
+              <div className="form-group">
+                <label>소단원 *</label>
+                <select
+                  name="subUnit"
+                  value={formData.subUnit}
+                  onChange={handleChange}
+                  disabled={!formData.mainUnit}
+                  className={errors.subUnit ? 'error' : ''}
+                >
+                  <option value="">소단원 선택</option>
+                  {availableSubUnits.map(subUnit => (
+                    <option key={subUnit} value={subUnit}>{subUnit}</option>
+                  ))}
+                </select>
+                {errors.subUnit && <span className="error-message">{errors.subUnit}</span>}
+              </div>
+            </div>
+          )}
 
           <div className="form-row">
             <div className="form-group">
@@ -858,7 +1137,499 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
             </button>
           </div>
         </form>
+        )}
       </div>
+    </div>
+  );
+}
+
+// 여러 과제 추가를 위한 컴포넌트
+function MultipleAssignmentForm({ 
+  forms, 
+  setForms, 
+  nextFormId, 
+  setNextFormId, 
+  onSave, 
+  onClose, 
+  isSubmitting, 
+  setIsSubmitting,
+  subjectUnits,
+  subjects
+}) {
+  const [errors, setErrors] = useState({});
+
+  // 새 과제 폼 추가
+  const handleAddForm = () => {
+    setForms(prev => [...prev, {
+      id: nextFormId,
+      assignmentName: '',
+      subject: '',
+      mainUnit: '',
+      subUnit: '',
+      questionCount: '',
+      assignmentType: 'QUIZ',
+      startDate: '',
+      dueDate: '',
+      fileUrl: [],
+      fileType: [],
+      answers: [],
+      previewFiles: [],
+      availableMainUnits: [],
+      availableSubUnits: []
+    }]);
+    setNextFormId(prev => prev + 1);
+  };
+
+  // 폼 제거
+  const handleRemoveForm = (formId) => {
+    if (forms.length === 1) {
+      alert('최소 하나의 과제 폼은 필요합니다.');
+      return;
+    }
+    setForms(prev => prev.filter(form => form.id !== formId));
+  };
+
+  // 폼 데이터 변경
+  const handleFormChange = (formId, field, value) => {
+    setForms(prev => prev.map(form => {
+      if (form.id === formId) {
+        const updatedForm = { ...form, [field]: value };
+        
+        // 과제 타입 변경 시 처리
+        if (field === 'assignmentType') {
+          if (value === '클리닉') {
+            updatedForm.mainUnit = '';
+            updatedForm.subUnit = '';
+            updatedForm.availableMainUnits = [];
+            updatedForm.availableSubUnits = [];
+          } else if (value === 'QUIZ' && form.subject) {
+            if (subjectUnits[form.subject]) {
+              updatedForm.availableMainUnits = subjectUnits[form.subject];
+              updatedForm.availableSubUnits = [];
+            }
+          }
+        }
+        
+        // 과목 변경 시 처리
+        if (field === 'subject') {
+          updatedForm.mainUnit = '';
+          updatedForm.subUnit = '';
+          if (value && form.assignmentType === 'QUIZ' && subjectUnits[value]) {
+            updatedForm.availableMainUnits = subjectUnits[value];
+            updatedForm.availableSubUnits = [];
+          } else {
+            updatedForm.availableMainUnits = [];
+            updatedForm.availableSubUnits = [];
+          }
+        }
+        
+        // 대단원 변경 시 처리
+        if (field === 'mainUnit') {
+          updatedForm.subUnit = '';
+          if (value && form.subject && subjectUnits[form.subject]) {
+            const selectedMainUnit = subjectUnits[form.subject].find(unit => unit.mainUnit === value);
+            if (selectedMainUnit) {
+              updatedForm.availableSubUnits = selectedMainUnit.subUnits;
+            } else {
+              updatedForm.availableSubUnits = [];
+            }
+          } else {
+            updatedForm.availableSubUnits = [];
+          }
+        }
+        
+        // 문항 수 변경 시 정답 배열 업데이트
+        if (field === 'questionCount') {
+          const questionCount = parseInt(value) || 0;
+          if (questionCount > 0) {
+            const newAnswers = [];
+            for (let i = 1; i <= questionCount; i++) {
+              const existing = form.answers?.find(ans => ans.questionNumber === i);
+              newAnswers.push({
+                questionNumber: i,
+                answer: existing?.answer || '',
+                score: existing?.score || 1
+              });
+            }
+            updatedForm.answers = newAnswers;
+          } else {
+            updatedForm.answers = [];
+          }
+        }
+        
+        return updatedForm;
+      }
+      return form;
+    }));
+  };
+
+  // 정답 변경
+  const handleAnswerChange = (formId, answerIndex, field, value) => {
+    setForms(prev => prev.map(form => {
+      if (form.id === formId) {
+        const newAnswers = [...(form.answers || [])];
+        if (newAnswers[answerIndex]) {
+          newAnswers[answerIndex] = {
+            ...newAnswers[answerIndex],
+            [field]: field === 'score' ? (parseFloat(value) || 0) : value
+          };
+        }
+        return { ...form, answers: newAnswers };
+      }
+      return form;
+    }));
+  };
+
+  // 폼 검증
+  const validateForm = (form) => {
+    const formErrors = {};
+    
+    if (!form.assignmentName) {
+      formErrors.assignmentName = '과제명을 입력해주세요';
+    }
+    if (!form.subject) {
+      formErrors.subject = '과목을 선택해주세요';
+    }
+    if (form.assignmentType === 'QUIZ') {
+      if (!form.mainUnit) {
+        formErrors.mainUnit = '대단원을 선택해주세요';
+      }
+      if (!form.subUnit) {
+        formErrors.subUnit = '소단원을 선택해주세요';
+      }
+    }
+    if (!form.questionCount || parseInt(form.questionCount) < 1) {
+      formErrors.questionCount = '문항 수를 입력해주세요';
+    }
+    if (!form.startDate) {
+      formErrors.startDate = '과제 시작일을 선택해주세요';
+    }
+    if (!form.dueDate) {
+      formErrors.dueDate = '과제 제출일을 선택해주세요';
+    } else if (form.startDate && form.dueDate) {
+      const start = new Date(form.startDate);
+      const due = new Date(form.dueDate);
+      if (due < start) {
+        formErrors.dueDate = '과제 제출일은 시작일 이후여야 합니다';
+      }
+    }
+    
+    // 정답 검증
+    if (form.answers && form.answers.length > 0) {
+      form.answers.forEach((ans, index) => {
+        if (!ans.answer || ans.answer.trim() === '') {
+          formErrors[`answer_${index + 1}`] = `${index + 1}번 문항의 정답을 입력해주세요`;
+        }
+      });
+    }
+    
+    return formErrors;
+  };
+
+  // 모든 폼 검증
+  const validateAllForms = () => {
+    const allErrors = {};
+    forms.forEach((form) => {
+      const formErrors = validateForm(form);
+      if (Object.keys(formErrors).length > 0) {
+        allErrors[form.id] = formErrors;
+      }
+    });
+    setErrors(allErrors);
+    return Object.keys(allErrors).length === 0;
+  };
+
+  // 모든 과제 저장
+  const handleSubmitAll = async (e) => {
+    e.preventDefault();
+    
+    if (!validateAllForms()) {
+      alert('입력한 정보를 확인해주세요.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    let successCount = 0;
+    let failCount = 0;
+
+    try {
+      for (const form of forms) {
+        try {
+          const formData = {
+            assignmentName: form.assignmentName,
+            subject: form.subject,
+            mainUnit: form.assignmentType === '클리닉' ? '' : form.mainUnit,
+            subUnit: form.assignmentType === '클리닉' ? '' : form.subUnit,
+            questionCount: parseInt(form.questionCount),
+            assignmentType: form.assignmentType,
+            startDate: form.startDate,
+            dueDate: form.dueDate,
+            fileUrl: form.fileUrl || [],
+            fileType: form.fileType || [],
+            answers: form.answers || []
+          };
+          
+          await onSave(formData, null);
+          successCount++;
+        } catch (error) {
+          console.error(`과제 "${form.assignmentName}" 저장 실패:`, error);
+          failCount++;
+        }
+      }
+      
+      if (successCount > 0) {
+        alert(`${successCount}개의 과제가 추가되었습니다.${failCount > 0 ? ` (${failCount}개 실패)` : ''}`);
+        onClose();
+      } else {
+        alert('과제 추가에 실패했습니다.');
+      }
+    } catch (error) {
+      console.error('과제 저장 오류:', error);
+      alert('과제 저장 중 오류가 발생했습니다.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmitAll} className="assignment-modal-form">
+      <div className="multiple-forms-container" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+        {forms.map((form, index) => (
+          <div key={form.id} className="assignment-form-item" style={{ marginBottom: '24px', padding: '16px', border: '1px solid #ddd', borderRadius: '8px' }}>
+            <div className="form-item-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 className="form-item-title" style={{ margin: 0, fontSize: '18px', fontWeight: '600' }}>과제 {index + 1}</h3>
+              {forms.length > 1 && (
+                <button
+                  type="button"
+                  className="remove-form-btn"
+                  onClick={() => handleRemoveForm(form.id)}
+                  style={{ padding: '4px 12px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                >
+                  삭제
+                </button>
+              )}
+            </div>
+            
+            <SingleAssignmentForm
+              form={form}
+              formIndex={index}
+              onChange={handleFormChange}
+              onAnswerChange={handleAnswerChange}
+              errors={errors[form.id] || {}}
+              subjectUnits={subjectUnits}
+              subjects={subjects}
+            />
+          </div>
+        ))}
+      </div>
+
+      <div className="multiple-forms-actions" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #ddd' }}>
+        <button
+          type="button"
+          className="btn-add-form"
+          onClick={handleAddForm}
+          disabled={isSubmitting}
+          style={{ padding: '8px 16px', background: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+        >
+          + 과제 추가
+        </button>
+        <div className="form-actions-right" style={{ display: 'flex', gap: '8px' }}>
+          <button type="button" className="btn-cancel" onClick={onClose} disabled={isSubmitting}>
+            취소
+          </button>
+          <button type="submit" className="btn-submit" disabled={isSubmitting}>
+            {isSubmitting ? '처리 중...' : `모두 저장 (${forms.length}개)`}
+          </button>
+        </div>
+      </div>
+    </form>
+  );
+}
+
+// 단일 과제 폼 컴포넌트
+function SingleAssignmentForm({ 
+  form, 
+  formIndex, 
+  onChange, 
+  onAnswerChange, 
+  errors, 
+  subjectUnits, 
+  subjects
+}) {
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    onChange(form.id, name, value);
+  };
+
+  return (
+    <div className="single-assignment-form">
+      <div className="form-row">
+        <div className="form-group">
+          <label>과제 타입 *</label>
+          <select
+            name="assignmentType"
+            value={form.assignmentType}
+            onChange={handleChange}
+            className={errors.assignmentType ? 'error' : ''}
+          >
+            <option value="QUIZ">QUIZ</option>
+            <option value="클리닉">클리닉</option>
+          </select>
+          {errors.assignmentType && <span className="error-message">{errors.assignmentType}</span>}
+        </div>
+
+        <div className="form-group">
+          <label>과제명 *</label>
+          <input
+            type="text"
+            name="assignmentName"
+            value={form.assignmentName}
+            onChange={handleChange}
+            placeholder="과제명"
+            className={errors.assignmentName ? 'error' : ''}
+          />
+          {errors.assignmentName && <span className="error-message">{errors.assignmentName}</span>}
+        </div>
+      </div>
+
+      <div className="form-row">
+        <div className="form-group">
+          <label>과목 *</label>
+          <select
+            name="subject"
+            value={form.subject}
+            onChange={handleChange}
+            className={errors.subject ? 'error' : ''}
+          >
+            <option value="">과목 선택</option>
+            {subjects.map(subject => (
+              <option key={subject} value={subject}>{subject}</option>
+            ))}
+          </select>
+          {errors.subject && <span className="error-message">{errors.subject}</span>}
+        </div>
+
+        <div className="form-group">
+          <label>문항 수 *</label>
+          <input
+            type="number"
+            name="questionCount"
+            value={form.questionCount}
+            onChange={handleChange}
+            placeholder="문항 수"
+            min="1"
+            className={errors.questionCount ? 'error' : ''}
+          />
+          {errors.questionCount && <span className="error-message">{errors.questionCount}</span>}
+        </div>
+      </div>
+
+      {form.assignmentType === 'QUIZ' && (
+        <div className="form-row">
+          <div className="form-group">
+            <label>대단원 *</label>
+            <select
+              name="mainUnit"
+              value={form.mainUnit}
+              onChange={handleChange}
+              disabled={!form.subject}
+              className={errors.mainUnit ? 'error' : ''}
+            >
+              <option value="">대단원 선택</option>
+              {form.availableMainUnits.map(unit => (
+                <option key={unit.mainUnit} value={unit.mainUnit}>{unit.mainUnit}</option>
+              ))}
+            </select>
+            {errors.mainUnit && <span className="error-message">{errors.mainUnit}</span>}
+          </div>
+
+          <div className="form-group">
+            <label>소단원 *</label>
+            <select
+              name="subUnit"
+              value={form.subUnit}
+              onChange={handleChange}
+              disabled={!form.mainUnit}
+              className={errors.subUnit ? 'error' : ''}
+            >
+              <option value="">소단원 선택</option>
+              {form.availableSubUnits.map(subUnit => (
+                <option key={subUnit} value={subUnit}>{subUnit}</option>
+              ))}
+            </select>
+            {errors.subUnit && <span className="error-message">{errors.subUnit}</span>}
+          </div>
+        </div>
+      )}
+
+      <div className="form-row">
+        <div className="form-group">
+          <label>과제 시작일 *</label>
+          <input
+            type="date"
+            name="startDate"
+            value={form.startDate}
+            onChange={handleChange}
+            className={errors.startDate ? 'error' : ''}
+          />
+          {errors.startDate && <span className="error-message">{errors.startDate}</span>}
+        </div>
+
+        <div className="form-group">
+          <label>과제 제출일 *</label>
+          <input
+            type="date"
+            name="dueDate"
+            value={form.dueDate}
+            onChange={handleChange}
+            className={errors.dueDate ? 'error' : ''}
+          />
+          {errors.dueDate && <span className="error-message">{errors.dueDate}</span>}
+        </div>
+      </div>
+
+      {/* 정답 입력 섹션 */}
+      {form.questionCount && parseInt(form.questionCount) > 0 && (
+        <div className="form-group answers-section">
+          <label className="answers-section-label">정답 입력 *</label>
+          <div className="answers-list">
+            {(form.answers || []).map((ans, index) => (
+              <div key={index} className="answer-item">
+                <div className="question-header">
+                  <span className="question-number">{index + 1}번</span>
+                  {errors[`answer_${index + 1}`] && (
+                    <span className="error-message">{errors[`answer_${index + 1}`]}</span>
+                  )}
+                </div>
+                <div className="answer-inputs">
+                  <div className="answer-input-group">
+                    <label>정답 *</label>
+                    <input
+                      type="text"
+                      value={ans.answer || ''}
+                      onChange={(e) => onAnswerChange(form.id, index, 'answer', e.target.value)}
+                      placeholder={`${index + 1}번 문항 정답`}
+                      className={errors[`answer_${index + 1}`] ? 'error' : ''}
+                      maxLength={50}
+                    />
+                  </div>
+                  <div className="points-input-group">
+                    <label>배점</label>
+                    <input
+                      type="number"
+                      value={ans.score || 1}
+                      onChange={(e) => onAnswerChange(form.id, index, 'score', e.target.value)}
+                      placeholder="배점"
+                      min="0"
+                      step="0.5"
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

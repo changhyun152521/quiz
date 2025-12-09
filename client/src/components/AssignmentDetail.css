@@ -449,6 +449,10 @@
   margin-right: 4px;
 }
 
+.undo-btn + .redo-btn {
+  margin-left: -2px;
+}
+
 .zoom-reset-btn:hover:not(:disabled) {
   background: #f0f0f0;
   border-color: #d0d0d0;
@@ -469,6 +473,17 @@
 .undo-btn {
   min-width: 32px;
   color: #1a1a1a;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.undo-btn:not(:disabled) {
+  color: #1a1a1a;
+}
+
+.undo-btn:disabled {
+  color: #ccc;
 }
 
 .undo-btn:not(:disabled) svg {
@@ -476,6 +491,30 @@
 }
 
 .undo-btn:disabled svg {
+  stroke: #ccc;
+}
+
+.redo-btn {
+  min-width: 32px;
+  color: #1a1a1a;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.redo-btn:not(:disabled) {
+  color: #1a1a1a;
+}
+
+.redo-btn:disabled {
+  color: #ccc;
+}
+
+.redo-btn:not(:disabled) svg {
+  stroke: #1a1a1a;
+}
+
+.redo-btn:disabled svg {
   stroke: #ccc;
 }
 

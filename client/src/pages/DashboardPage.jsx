@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import { get, put, del, patch } from '../utils/api';
 import MyInfoModal from '../components/MyInfoModal';
+import StudyReportModal from '../components/StudyReportModal';
 import AssignmentDetailPage from './AssignmentDetailPage';
 import '../components/Dashboard.css';
 
 function DashboardPage({ user, onLogout, onGoToMainPage, selectedCourse }) {
   const [activeTab, setActiveTab] = useState('all');
   const [showMyInfoModal, setShowMyInfoModal] = useState(false);
+  const [showStudyReportModal, setShowStudyReportModal] = useState(false);
   const [selectedAssignment, setSelectedAssignment] = useState(null);
   
   // 강좌 및 과제 데이터
@@ -219,6 +221,12 @@ function DashboardPage({ user, onLogout, onGoToMainPage, selectedCourse }) {
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             <button 
               className="dashboard-logout-btn" 
+              onClick={() => setShowStudyReportModal(true)}
+            >
+              학습현황
+            </button>
+            <button 
+              className="dashboard-logout-btn" 
               onClick={() => setShowMyInfoModal(true)}
             >
               내정보
@@ -415,10 +423,16 @@ function DashboardPage({ user, onLogout, onGoToMainPage, selectedCourse }) {
                       <div className="assignment-card-body">
                         <h3 className="assignment-name">{assignment.assignmentName}</h3>
                         <div className="assignment-details">
-                          <div className="assignment-detail-item">
-                            <span className="detail-label">과목:</span>
-                            <span className="detail-value">{assignment.subject}</span>
-                          </div>
+                          {(assignment.subject || assignment.mainUnit || assignment.subUnit) && (
+                            <div className="assignment-detail-item">
+                              <span className="detail-label">단원:</span>
+                              <span className="detail-value">
+                                {[assignment.subject, assignment.mainUnit, assignment.subUnit]
+                                  .filter(Boolean)
+                                  .join(' / ')}
+                              </span>
+                            </div>
+                          )}
                           <div className="assignment-detail-item">
                             <span className="detail-label">문항 수:</span>
                             <span className="detail-value">{assignment.questionCount}개</span>
@@ -524,6 +538,13 @@ function DashboardPage({ user, onLogout, onGoToMainPage, selectedCourse }) {
           </div>
         </div>
       </footer>
+
+      <StudyReportModal
+        showModal={showStudyReportModal}
+        onClose={() => setShowStudyReportModal(false)}
+        user={user}
+        selectedCourseId={selectedCourseId}
+      />
 
       <MyInfoModal
         showModal={showMyInfoModal}

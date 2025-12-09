@@ -6,6 +6,7 @@ import CourseModal from '../components/CourseModal';
 import AssignmentModal from '../components/AssignmentModal';
 import CourseAssignmentModal from '../components/CourseAssignmentModal';
 import TestResultModal from '../components/TestResultModal';
+import CourseReportModal from '../components/CourseReportModal';
 import MyInfoModal from '../components/MyInfoModal';
 import '../components/AdminDashboard.css';
 
@@ -47,6 +48,8 @@ function AdminDashboardPage({ user, onLogout, onGoToMainPage }) {
   const [selectedCourseForAssignment, setSelectedCourseForAssignment] = useState(null);
   const [showTestResultModal, setShowTestResultModal] = useState(false);
   const [selectedCourseForTest, setSelectedCourseForTest] = useState(null);
+  const [showCourseReportModal, setShowCourseReportModal] = useState(false);
+  const [selectedCourseForReport, setSelectedCourseForReport] = useState(null);
   const [currentPageCourses, setCurrentPageCourses] = useState(1);
 
   // 과제 관리 상태
@@ -464,6 +467,7 @@ function AdminDashboardPage({ user, onLogout, onGoToMainPage }) {
       if (teacherId) {
         // 수정 - 비밀번호가 없으면 제외
         const updateData = {
+          userId: teacherData.userId,
           name: teacherData.name
         };
         if (teacherData.password) {
@@ -992,6 +996,16 @@ function AdminDashboardPage({ user, onLogout, onGoToMainPage }) {
                                     과제 조회
                                   </button>
                                   <button
+                                    className="action-btn report-btn"
+                                    onClick={() => {
+                                      setSelectedCourseForReport(course);
+                                      setShowCourseReportModal(true);
+                                    }}
+                                    title="보고서"
+                                  >
+                                    보고서
+                                  </button>
+                                  <button
                                     className="action-btn edit-btn"
                                     onClick={() => handleEditCourse(course)}
                                   >
@@ -1255,6 +1269,14 @@ function AdminDashboardPage({ user, onLogout, onGoToMainPage }) {
         allAssignments={allAssignments}
       />
 
+      <CourseReportModal
+        showModal={showCourseReportModal}
+        onClose={() => {
+          setShowCourseReportModal(false);
+          setSelectedCourseForReport(null);
+        }}
+        course={selectedCourseForReport}
+      />
 
       <MyInfoModal
         showModal={showMyInfoModal}

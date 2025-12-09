@@ -40,6 +40,8 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
   const [submissionResult, setSubmissionResult] = useState(null); // 제출 결과 저장
   const [isSubmitted, setIsSubmitted] = useState(false); // 제출 상태
   const [drawingHistory, setDrawingHistory] = useState([]); // 그리기 히스토리 (각 stroke마다 저장)
+  const [redoHistory, setRedoHistory] = useState([]); // 되돌리기 히스토리 (되돌린 항목들 저장)
+  const isSavingHistoryRef = useRef(false); // 히스토리 저장 중복 방지
   const [isLoadingAssignment, setIsLoadingAssignment] = useState(false); // assignment 로딩 상태
 
   // assignment prop이 변경될 때 currentAssignment 업데이트
@@ -120,6 +122,7 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
       setZoom(1);
       setPanOffset({ x: 0, y: 0 });
       setDrawingHistory([]); // 이미지 변경 시 히스토리 초기화
+      setRedoHistory([]); // redo 히스토리도 초기화
       // 첫 이미지의 변경사항 여부 확인 (24시간 이내인 경우만)
       if (assignment && assignment._id && studentId) {
         const submittedAtKey = `assignment_${assignment._id}_student_${studentId}_submittedAt`;
@@ -901,10 +904,30 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
       if (touches.length === 0) {
         // 직접 마우스 업 로직 실행
         if (isDrawing) {
-          const drawingCanvas = drawingCanvasRef.current;
-          if (drawingCanvas) {
-            const currentState = drawingCanvas.toDataURL('image/png');
-            setDrawingHistory(prev => [...prev, currentState]);
+          // 중복 저장 방지
+          if (!isSavingHistoryRef.current) {
+            isSavingHistoryRef.current = true;
+            const drawingCanvas = drawingCanvasRef.current;
+            if (drawingCanvas) {
+              // 지우개 작업 후 globalCompositeOperation 초기화
+              const ctx = drawingCanvas.getContext('2d');
+              ctx.globalCompositeOperation = 'source-over';
+              
+              const currentState = drawingCanvas.toDataURL('image/png');
+              setDrawingHistory(prev => {
+                // 중복 체크: 마지막 상태와 동일하면 저장하지 않음
+                if (prev.length > 0 && prev[prev.length - 1] === currentState) {
+                  isSavingHistoryRef.current = false;
+                  return prev;
+                }
+                isSavingHistoryRef.current = false;
+                // 새로운 작업을 하면 redo 히스토리 초기화
+                setRedoHistory([]);
+                return [...prev, currentState];
+              });
+            } else {
+              isSavingHistoryRef.current = false;
+            }
           }
           saveDrawing();
           setIsDrawing(false);
@@ -938,6 +961,7 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
       setZoom(1);
       setPanOffset({ x: 0, y: 0 });
       setDrawingHistory([]); // 이미지 변경 시 히스토리 초기화
+      setRedoHistory([]); // redo 히스토리도 초기화
       // 다음 이미지의 변경사항 여부 확인 (24시간 이내인 경우만)
       if (studentId) {
         const submittedAtKey = `assignment_${assignment._id}_student_${studentId}_submittedAt`;
@@ -982,6 +1006,7 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
       setZoom(1);
       setPanOffset({ x: 0, y: 0 });
       setDrawingHistory([]); // 이미지 변경 시 히스토리 초기화
+      setRedoHistory([]); // redo 히스토리도 초기화
       // 다음 이미지의 변경사항 여부 확인 (24시간 이내인 경우만)
       if (studentId) {
         const submittedAtKey = `assignment_${assignment._id}_student_${studentId}_submittedAt`;
@@ -1071,25 +1096,17 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
     setZoom(prev => Math.max(prev - 0.25, 0.5));
   };
 
-  // 돌아가기 (마지막 그리기/지우기 작업만 취소)
+  // 되돌리기 (마지막 그리기/지우기 작업만 취소)
   const handleUndo = () => {
     if (drawingHistory.length === 0) {
-      // 히스토리가 없으면 전체 지우기
-      const drawingCanvas = drawingCanvasRef.current;
-      if (drawingCanvas && studentId) {
-        const ctx = drawingCanvas.getContext('2d');
-        ctx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
-        localStorage.removeItem(`assignment_${assignment._id}_student_${studentId}_image_${currentImageIndex}`);
-        setHasChanges(false);
-        setDrawingHistory([]);
-      }
       return;
     }
     
-    // 마지막 작업 제거
-    const newHistory = [...drawingHistory];
-    newHistory.pop();
+    // 마지막 작업 하나만 제거하고 redo 히스토리에 추가
+    const lastState = drawingHistory[drawingHistory.length - 1];
+    const newHistory = drawingHistory.slice(0, -1); // 마지막 항목 제외한 새 배열
     setDrawingHistory(newHistory);
+    setRedoHistory(prev => [...prev, lastState]); // 되돌린 항목을 redo 히스토리에 추가
     
     // 이전 상태로 복원
     const drawingCanvas = drawingCanvasRef.current;
@@ -1097,11 +1114,15 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
       const ctx = drawingCanvas.getContext('2d');
       ctx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
       
+      // 캔버스 컨텍스트 상태 초기화 (지우개 작업 후 복원 시 필요)
+      ctx.globalCompositeOperation = 'source-over';
+      
       // 마지막 상태로 복원
       if (newHistory.length > 0) {
-        const lastState = newHistory[newHistory.length - 1];
+        const prevState = newHistory[newHistory.length - 1];
         const img = new Image();
         img.onload = () => {
+          ctx.globalCompositeOperation = 'source-over';
           ctx.drawImage(img, 0, 0);
           setHasChanges(true);
           // 복원 후 localStorage에도 저장
@@ -1111,12 +1132,48 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
           console.error('히스토리 이미지 로드 실패');
           setHasChanges(newHistory.length > 0);
         };
-        img.src = lastState;
+        img.src = prevState;
       } else {
         // 히스토리가 비어있으면 변경사항 없음
         setHasChanges(false);
         localStorage.removeItem(`assignment_${assignment._id}_student_${studentId}_image_${currentImageIndex}`);
       }
+    }
+  };
+
+  // 다시 살리기 (되돌린 작업 복원)
+  const handleRedo = () => {
+    if (redoHistory.length === 0) {
+      return;
+    }
+    
+    // redo 히스토리의 마지막 항목을 drawing 히스토리에 다시 추가
+    const lastRedoState = redoHistory[redoHistory.length - 1];
+    const newRedoHistory = redoHistory.slice(0, -1);
+    setRedoHistory(newRedoHistory);
+    setDrawingHistory(prev => [...prev, lastRedoState]);
+    
+    // 복원된 상태로 캔버스 업데이트
+    const drawingCanvas = drawingCanvasRef.current;
+    if (drawingCanvas) {
+      const ctx = drawingCanvas.getContext('2d');
+      ctx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
+      
+      // 캔버스 컨텍스트 상태 초기화 (지우개 작업 후 복원 시 필요)
+      ctx.globalCompositeOperation = 'source-over';
+      
+      const img = new Image();
+      img.onload = () => {
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.drawImage(img, 0, 0);
+        setHasChanges(true);
+        // 복원 후 localStorage에도 저장
+        saveDrawing();
+      };
+      img.onerror = () => {
+        console.error('Redo 이미지 로드 실패');
+      };
+      img.src = lastRedoState;
     }
   };
 
@@ -1140,6 +1197,8 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
       const coords = getCanvasCoordinates(e.clientX, e.clientY);
       
       const ctx = drawingCanvas.getContext('2d');
+      // 캔버스 컨텍스트 상태 초기화
+      ctx.globalCompositeOperation = tool === 'eraser' ? 'destination-out' : 'source-over';
       ctx.beginPath();
       ctx.moveTo(coords.x, coords.y);
     }
@@ -1187,10 +1246,30 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
   const handleMouseUp = () => {
     if (isDrawing) {
       // 그리기 완료 - 현재 상태를 히스토리에 저장 (stroke 완료 시점)
-      const drawingCanvas = drawingCanvasRef.current;
-      if (drawingCanvas) {
-        const currentState = drawingCanvas.toDataURL('image/png');
-        setDrawingHistory(prev => [...prev, currentState]);
+      // 중복 저장 방지
+      if (!isSavingHistoryRef.current) {
+        isSavingHistoryRef.current = true;
+        const drawingCanvas = drawingCanvasRef.current;
+        if (drawingCanvas) {
+          // 지우개 작업 후 globalCompositeOperation 초기화
+          const ctx = drawingCanvas.getContext('2d');
+          ctx.globalCompositeOperation = 'source-over';
+          
+          const currentState = drawingCanvas.toDataURL('image/png');
+          setDrawingHistory(prev => {
+            // 중복 체크: 마지막 상태와 동일하면 저장하지 않음
+            if (prev.length > 0 && prev[prev.length - 1] === currentState) {
+              isSavingHistoryRef.current = false;
+              return prev;
+            }
+            isSavingHistoryRef.current = false;
+            // 새로운 작업을 하면 redo 히스토리 초기화
+            setRedoHistory([]);
+            return [...prev, currentState];
+          });
+        } else {
+          isSavingHistoryRef.current = false;
+        }
       }
       
       saveDrawing();
@@ -1344,10 +1423,25 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
   const handleClear = () => {
     const drawingCanvas = drawingCanvasRef.current;
     if (drawingCanvas && studentId) {
+      // 지우기 전 현재 상태를 히스토리에 저장
+      const currentState = drawingCanvas.toDataURL('image/png');
+      
       const ctx = drawingCanvas.getContext('2d');
       ctx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
+      ctx.globalCompositeOperation = 'source-over'; // 컨텍스트 상태 초기화
+      
       localStorage.removeItem(`assignment_${assignment._id}_student_${studentId}_image_${currentImageIndex}`);
       setHasChanges(false);
+      
+      // 현재 상태를 히스토리에 저장 (되돌리기로 복원 가능하도록)
+      setDrawingHistory(prev => {
+        // 중복 체크: 마지막 상태와 동일하면 저장하지 않음
+        if (prev.length > 0 && prev[prev.length - 1] === currentState) {
+          return prev;
+        }
+        return [...prev, currentState];
+      });
+      setRedoHistory([]); // redo 히스토리 초기화
     }
   };
 
@@ -1581,7 +1675,7 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
       <header className="assignment-detail-header">
         <div className="assignment-detail-header-content">
           <button onClick={onBack} className="btn-back-header" title="돌아가기">
-            ×
+            ←
           </button>
           <h2 className="assignment-detail-title">{assignment.assignmentName}</h2>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1603,7 +1697,7 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
                       fullData: data.data
                     });
                     
-                    // 정답이 없으면 경고 및 상세 정보 출력
+                    // 정답이 없으면 경고 및 상세 정보 출력 (제출된 경우에만)
                     if (!data.data.answers || data.data.answers.length === 0) {
                       console.error('정답 버튼 클릭 - 정답이 없습니다!', {
                         assignmentId: assignment._id,
@@ -1613,7 +1707,10 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
                         hasSubmissions: !!data.data.submissions,
                         submissions: data.data.submissions
                       });
-                      alert('경고: 정답 정보를 불러올 수 없습니다. 관리자에게 문의하세요.');
+                      // 제출된 경우에만 경고 표시 (제출 전에는 정답이 없는 것이 정상)
+                      if (isSubmitted) {
+                        alert('경고: 정답 정보를 불러올 수 없습니다. 관리자에게 문의하세요.');
+                      }
                     } else {
                       console.log('정답 버튼 클릭 - 정답 확인:', {
                         answersCount: data.data.answers.length,
@@ -1671,6 +1768,10 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
                   }
                 } catch (error) {
                   console.error('과제 정보 가져오기 오류:', error);
+                  // 제출 전에는 에러 메시지를 표시하지 않음 (정답이 없는 것이 정상)
+                  if (isSubmitted) {
+                    alert('과제 정보를 불러올 수 없습니다. 관리자에게 문의하세요.');
+                  }
                 } finally {
                   setIsLoadingAssignment(false);
                 }
@@ -1705,11 +1806,15 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
               disabled={drawingHistory.length === 0 && !hasChanges}
               title="마지막 작업 취소"
             >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 7v6h6"/>
-                <path d="M21 17a9 9 0 0 1-9-9 9 9 0 0 1 6 2.3L21 7"/>
-                <path d="M21 7v6h-6"/>
-              </svg>
+              ↶
+            </button>
+            <button 
+              onClick={handleRedo} 
+              className="zoom-reset-btn redo-btn"
+              disabled={redoHistory.length === 0}
+              title="되돌린 작업 복원"
+            >
+              ↷
             </button>
           <button onClick={handleClear} className="btn-clear">
             전체 지우기

@@ -126,7 +126,6 @@ function TeacherModal({ showModal, onClose, teacher, onSave, mode }) {
               value={formData.userId}
               onChange={handleChange}
               placeholder="아이디 (4~20자)"
-              disabled={mode === 'edit'}
               className={errors.userId ? 'error' : ''}
             />
             {errors.userId && <span className="error-message">{errors.userId}</span>}
