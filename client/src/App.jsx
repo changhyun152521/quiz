@@ -185,6 +185,7 @@ function App() {
       <MainPage 
         onLoginSuccess={handleLoginSuccess} 
         onBackToDashboard={isLoggedIn ? handleBackToDashboard : null} 
+        onLogout={handleLogout}
         onShowCourseSelection={() => {
           // 학습하기 버튼을 클릭했을 때만 강좌 선택 모달 표시
           // user가 없으면 먼저 로그인해야 함

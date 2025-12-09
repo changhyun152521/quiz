@@ -4,7 +4,7 @@ import SignUp from '../components/SignUp'
 import Login from '../components/Login'
 import '../App.css'
 
-function MainPage({ onLoginSuccess, onBackToDashboard, onShowCourseSelection }) {
+function MainPage({ onLoginSuccess, onBackToDashboard, onShowCourseSelection, onLogout }) {
   const [showSignUpModal, setShowSignUpModal] = useState(false)
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -129,12 +129,26 @@ function MainPage({ onLoginSuccess, onBackToDashboard, onShowCourseSelection }) 
         <header className="top-banner">
         <div className="banner-content">
           <div className="banner-text">QUIZ LAB</div>
-          <a 
-            href="https://www.mathchang.com/" 
-            className="banner-home-link"
-          >
-            이창현수학 돌아가기
-          </a>
+          <div className="banner-links">
+            <a 
+              href="https://www.mathchang.com/" 
+              className="banner-home-link"
+            >
+              이창현수학 돌아가기
+            </a>
+            {user && onLogout && (
+              <button
+                className="banner-logout-link"
+                onClick={() => {
+                  if (window.confirm('정말 로그아웃 하시겠습니까?')) {
+                    onLogout();
+                  }
+                }}
+              >
+                로그아웃
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
