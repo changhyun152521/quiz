@@ -243,9 +243,9 @@ function formatReportMessage(student, course, startDate, endDate, reportData) {
     message += `\n`;
   }
 
-  // 잘한 단원
+  // 강점 단원
   if (reportData.strongUnits && reportData.strongUnits.length > 0) {
-    message += `✅ 잘한 단원\n`;
+    message += `✅ 강점 단원\n`;
     reportData.strongUnits.slice(0, 3).forEach((unit, index) => {
       const unitAccuracy = unit.totalQuestions > 0
         ? ((unit.correctQuestions / unit.totalQuestions) * 100).toFixed(1)

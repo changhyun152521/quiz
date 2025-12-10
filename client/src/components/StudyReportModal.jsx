@@ -198,10 +198,10 @@ function StudyReportModal({ showModal, onClose, user, selectedCourseId }) {
                 </div>
               )}
 
-              {/* 잘한 단원 */}
+              {/* 강점 단원 */}
               {reportData.strongUnits && reportData.strongUnits.length > 0 && (
                 <div className="report-strong-section">
-                  <h3 className="report-section-title">잘한 단원</h3>
+                  <h3 className="report-section-title">강점 단원</h3>
                   <div className="strong-units-list">
                     {reportData.strongUnits.map((unit, index) => {
                       const accuracy = unit.totalQuestions > 0

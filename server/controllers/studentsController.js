@@ -171,7 +171,7 @@ const getStudyReport = async (req, res) => {
       })
       .slice(0, 5); // 상위 5개만
 
-    // 잘한 단원 찾기 (정답률이 70% 이상인 단원)
+    // 강점 단원 찾기 (정답률이 70% 이상인 단원)
     const strongUnits = subUnitStats
       .filter(stat => {
         const accuracy = stat.totalQuestions > 0

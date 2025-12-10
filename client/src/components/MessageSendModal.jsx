@@ -179,10 +179,10 @@ function MessageSendModal({ showModal, onClose, onSend, student, courseName, sta
                     </div>
                   )}
 
-                  {/* 잘한 단원 */}
+                  {/* 강점 단원 */}
                   {reportData.strongUnits && reportData.strongUnits.length > 0 && (
                     <div className="report-preview-strong">
-                      <h3>잘한 단원</h3>
+                      <h3>강점 단원</h3>
                       <div className="units-list">
                         {reportData.strongUnits.slice(0, 5).map((unit, index) => {
                           const accuracy = unit.totalQuestions > 0
