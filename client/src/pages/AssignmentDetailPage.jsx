@@ -44,6 +44,29 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
   const isSavingHistoryRef = useRef(false); // 히스토리 저장 중복 방지
   const [isLoadingAssignment, setIsLoadingAssignment] = useState(false); // assignment 로딩 상태
   const [showSolutionModal, setShowSolutionModal] = useState(false); // 해설지 모달 표시 여부
+  const [solutionZoomLevel, setSolutionZoomLevel] = useState(1); // 해설지 줌 레벨
+  const [solutionPanPosition, setSolutionPanPosition] = useState({ x: 0, y: 0 }); // 해설지 팬 위치
+  const [isSolutionDragging, setIsSolutionDragging] = useState(false); // 해설지 드래그 중 여부
+  const [solutionDragStart, setSolutionDragStart] = useState({ x: 0, y: 0 }); // 해설지 드래그 시작 위치
+  const [currentSolutionImageIndex, setCurrentSolutionImageIndex] = useState(0); // 현재 해설지 이미지 인덱스
+  const solutionViewerRef = useRef(null); // 해설지 뷰어 ref
+  const [solutionImageLoaded, setSolutionImageLoaded] = useState(false); // 해설지 이미지 로드 여부
+  const solutionCanvasRef = useRef(null); // 해설지 캔버스 ref
+  const [solutionTouchStartDistance, setSolutionTouchStartDistance] = useState(0); // 해설지 터치 시작 거리
+  const [solutionTouchStartZoom, setSolutionTouchStartZoom] = useState(1); // 해설지 터치 시작 줌 레벨
+  const [isSolutionPinching, setIsSolutionPinching] = useState(false); // 해설지 핀치 줌 중 여부
+
+  // 해설지 모달이 열릴 때 줌/팬 초기화
+  useEffect(() => {
+    if (showSolutionModal) {
+      setSolutionZoomLevel(1);
+      setSolutionPanPosition({ x: 0, y: 0 });
+      setCurrentSolutionImageIndex(0);
+      setIsSolutionDragging(false);
+      setIsSolutionPinching(false);
+      setSolutionImageLoaded(false);
+    }
+  }, [showSolutionModal]);
 
   // assignment prop이 변경될 때 currentAssignment 업데이트
   useEffect(() => {
@@ -2261,114 +2284,317 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
       )}
 
       {/* 해설지 모달 */}
-      {showSolutionModal && (
-        <div 
-          className="solution-modal-overlay"
-          onClick={() => setShowSolutionModal(false)}
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.7)',
-            zIndex: 10000,
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center'
-          }}
-        >
+      {showSolutionModal && (() => {
+        const solutionFileUrls = Array.isArray(currentAssignment?.solutionFileUrl) 
+          ? currentAssignment.solutionFileUrl 
+          : (Array.isArray(assignment?.solutionFileUrl) ? assignment.solutionFileUrl : []);
+        const solutionFileTypes = Array.isArray(currentAssignment?.solutionFileType) 
+          ? currentAssignment.solutionFileType 
+          : (Array.isArray(assignment?.solutionFileType) ? assignment.solutionFileType : []);
+        
+        const solutionImages = [];
+        for (let i = 0; i < solutionFileUrls.length; i++) {
+          if (solutionFileTypes[i] === 'image') {
+            solutionImages.push(solutionFileUrls[i]);
+          }
+        }
+        
+        return (
           <div 
-            className="solution-modal-content"
-            onClick={(e) => e.stopPropagation()}
+            className="solution-modal-overlay"
+            onClick={() => {
+              setShowSolutionModal(false);
+              setSolutionZoomLevel(1);
+              setSolutionPanPosition({ x: 0, y: 0 });
+              setCurrentSolutionImageIndex(0);
+            }}
             style={{
-              backgroundColor: 'white',
-              borderRadius: '8px',
-              padding: '20px',
-              maxWidth: '90vw',
-              maxHeight: '90vh',
-              overflow: 'auto',
-              position: 'relative',
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(0, 0, 0, 0.7)',
+              zIndex: 10000,
               display: 'flex',
-              flexDirection: 'column'
+              justifyContent: 'center',
+              alignItems: 'center'
             }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '600' }}>해설지</h2>
-              <button
-                onClick={() => setShowSolutionModal(false)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  fontSize: '24px',
-                  cursor: 'pointer',
-                  padding: '0',
-                  width: '30px',
-                  height: '30px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-              >
-                ×
-              </button>
-            </div>
-            <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              {(() => {
-                const solutionFileUrls = Array.isArray(currentAssignment?.solutionFileUrl) 
-                  ? currentAssignment.solutionFileUrl 
-                  : (Array.isArray(assignment?.solutionFileUrl) ? assignment.solutionFileUrl : []);
-                const solutionFileTypes = Array.isArray(currentAssignment?.solutionFileType) 
-                  ? currentAssignment.solutionFileType 
-                  : (Array.isArray(assignment?.solutionFileType) ? assignment.solutionFileType : []);
-                
-                const solutionImages = [];
-                for (let i = 0; i < solutionFileUrls.length; i++) {
-                  if (solutionFileTypes[i] === 'image') {
-                    solutionImages.push(solutionFileUrls[i]);
-                  }
-                }
-                
-                if (solutionImages.length === 0) {
-                  return (
-                    <div style={{ padding: '40px', textAlign: 'center', color: '#666' }}>
-                      해설지 파일이 없습니다.
+            <div 
+              className="solution-modal-content"
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                backgroundColor: 'white',
+                borderRadius: '8px',
+                padding: '20px',
+                maxWidth: '95vw',
+                maxHeight: '95vh',
+                overflow: 'hidden',
+                position: 'relative',
+                display: 'flex',
+                flexDirection: 'column',
+                width: '100%',
+                height: '100%'
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexShrink: 0 }}>
+                <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '600' }}>해설지</h2>
+                <button
+                  onClick={() => {
+                    setShowSolutionModal(false);
+                    setSolutionZoomLevel(1);
+                    setSolutionPanPosition({ x: 0, y: 0 });
+                    setCurrentSolutionImageIndex(0);
+                  }}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    fontSize: '24px',
+                    cursor: 'pointer',
+                    padding: '0',
+                    width: '30px',
+                    height: '30px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+              
+              {solutionImages.length === 0 ? (
+                <div style={{ padding: '40px', textAlign: 'center', color: '#666', flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  해설지 파일이 없습니다.
+                </div>
+              ) : (
+                <>
+                  {/* 줌 컨트롤 */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', justifyContent: 'center', flexShrink: 0 }}>
+                    <button
+                      onClick={() => setSolutionZoomLevel(prev => Math.max(0.5, prev - 0.25))}
+                      style={{
+                        padding: '6px 12px',
+                        background: '#f0f0f0',
+                        border: '1px solid #ddd',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '14px'
+                      }}
+                    >
+                      −
+                    </button>
+                    <span style={{ minWidth: '60px', textAlign: 'center', fontSize: '14px' }}>
+                      {Math.round(solutionZoomLevel * 100)}%
+                    </span>
+                    <button
+                      onClick={() => setSolutionZoomLevel(prev => Math.min(5, prev + 0.25))}
+                      style={{
+                        padding: '6px 12px',
+                        background: '#f0f0f0',
+                        border: '1px solid #ddd',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '14px'
+                      }}
+                    >
+                      +
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSolutionZoomLevel(1);
+                        setSolutionPanPosition({ x: 0, y: 0 });
+                      }}
+                      style={{
+                        padding: '6px 12px',
+                        background: '#f0f0f0',
+                        border: '1px solid #ddd',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '14px',
+                        marginLeft: '8px'
+                      }}
+                    >
+                      초기화
+                    </button>
+                  </div>
+                  
+                  {/* 해설지 이미지 뷰어 */}
+                  <div
+                    ref={solutionViewerRef}
+                    onWheel={(e) => {
+                      e.preventDefault();
+                      const delta = e.deltaY > 0 ? -0.1 : 0.1;
+                      const newZoom = Math.max(0.5, Math.min(5, solutionZoomLevel + delta));
+                      setSolutionZoomLevel(newZoom);
+                    }}
+                    onMouseDown={(e) => {
+                      if (solutionZoomLevel > 1) {
+                        setIsSolutionDragging(true);
+                        setSolutionDragStart({ x: e.clientX - solutionPanPosition.x, y: e.clientY - solutionPanPosition.y });
+                      }
+                    }}
+                    onMouseMove={(e) => {
+                      if (isSolutionDragging && solutionZoomLevel > 1) {
+                        setSolutionPanPosition({
+                          x: e.clientX - solutionDragStart.x,
+                          y: e.clientY - solutionDragStart.y
+                        });
+                      }
+                    }}
+                    onMouseUp={() => setIsSolutionDragging(false)}
+                    onMouseLeave={() => setIsSolutionDragging(false)}
+                    onTouchStart={(e) => {
+                      if (e.touches.length === 2) {
+                        e.preventDefault();
+                        const distance = Math.sqrt(
+                          Math.pow(e.touches[1].clientX - e.touches[0].clientX, 2) +
+                          Math.pow(e.touches[1].clientY - e.touches[0].clientY, 2)
+                        );
+                        setSolutionTouchStartDistance(distance);
+                        setSolutionTouchStartZoom(solutionZoomLevel);
+                        setIsSolutionPinching(true);
+                      } else if (e.touches.length === 1 && solutionZoomLevel > 1) {
+                        const touch = e.touches[0];
+                        setIsSolutionDragging(true);
+                        setSolutionDragStart({ x: touch.clientX - solutionPanPosition.x, y: touch.clientY - solutionPanPosition.y });
+                      }
+                    }}
+                    onTouchMove={(e) => {
+                      if (e.touches.length === 2 && isSolutionPinching) {
+                        e.preventDefault();
+                        const distance = Math.sqrt(
+                          Math.pow(e.touches[1].clientX - e.touches[0].clientX, 2) +
+                          Math.pow(e.touches[1].clientY - e.touches[0].clientY, 2)
+                        );
+                        const scale = distance / solutionTouchStartDistance;
+                        const newZoom = Math.max(0.5, Math.min(5, solutionTouchStartZoom * scale));
+                        setSolutionZoomLevel(newZoom);
+                      } else if (e.touches.length === 1 && isSolutionDragging && solutionZoomLevel > 1) {
+                        e.preventDefault();
+                        const touch = e.touches[0];
+                        setSolutionPanPosition({
+                          x: touch.clientX - solutionDragStart.x,
+                          y: touch.clientY - solutionDragStart.y
+                        });
+                      }
+                    }}
+                    onTouchEnd={(e) => {
+                      if (e.touches.length < 2) {
+                        setIsSolutionPinching(false);
+                      }
+                      if (e.touches.length === 0) {
+                        setIsSolutionDragging(false);
+                      }
+                    }}
+                    style={{
+                      flex: 1,
+                      overflow: 'hidden',
+                      position: 'relative',
+                      cursor: solutionZoomLevel > 1 ? (isSolutionDragging ? 'grabbing' : 'grab') : 'default',
+                      touchAction: 'none',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: '#f5f5f5'
+                    }}
+                  >
+                    <div
+                      style={{
+                        position: 'relative',
+                        transform: `translate(${solutionPanPosition.x}px, ${solutionPanPosition.y}px)`,
+                        transition: isSolutionDragging || isSolutionPinching ? 'none' : 'transform 0.1s ease-out',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                    >
+                      {solutionImages[currentSolutionImageIndex] && (
+                        <img
+                          ref={solutionCanvasRef}
+                          src={solutionImages[currentSolutionImageIndex]}
+                          alt={`해설지 ${currentSolutionImageIndex + 1}`}
+                          crossOrigin="anonymous"
+                          onLoad={() => {
+                            setSolutionImageLoaded(true);
+                          }}
+                          onError={(e) => {
+                            console.error('해설지 이미지 로드 실패:', solutionImages[currentSolutionImageIndex]);
+                            e.target.style.display = 'none';
+                          }}
+                          style={{
+                            maxWidth: '100%',
+                            maxHeight: '100%',
+                            width: 'auto',
+                            height: 'auto',
+                            transform: `scale(${solutionZoomLevel})`,
+                            transformOrigin: 'center center',
+                            pointerEvents: 'none',
+                            userSelect: 'none',
+                            WebkitUserSelect: 'none',
+                            WebkitTouchCallout: 'none',
+                            objectFit: 'contain'
+                          }}
+                          draggable={false}
+                          onContextMenu={(e) => e.preventDefault()}
+                        />
+                      )}
                     </div>
-                  );
-                }
-                
-                return (
-                  <>
-                    {solutionImages.map((imgUrl, index) => (
-                      <img
-                        key={index}
-                        src={imgUrl}
-                        alt={`해설지 ${index + 1}`}
-                        crossOrigin="anonymous"
-                        onError={(e) => {
-                          console.error('해설지 이미지 로드 실패:', imgUrl);
-                          e.target.style.display = 'none';
+                  </div>
+                  
+                  {/* 페이지네이션 */}
+                  {solutionImages.length > 1 && (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginTop: '12px', flexShrink: 0 }}>
+                      <button
+                        onClick={() => {
+                          setCurrentSolutionImageIndex(prev => Math.max(0, prev - 1));
+                          setSolutionZoomLevel(1);
+                          setSolutionPanPosition({ x: 0, y: 0 });
                         }}
+                        disabled={currentSolutionImageIndex === 0}
                         style={{
-                          maxWidth: '100%',
-                          height: 'auto',
-                          marginBottom: index < solutionImages.length - 1 ? '16px' : '0',
-                          pointerEvents: 'none',
-                          userSelect: 'none',
-                          WebkitUserSelect: 'none',
-                          WebkitTouchCallout: 'none'
+                          padding: '8px 16px',
+                          background: currentSolutionImageIndex === 0 ? '#f0f0f0' : '#1a1a1a',
+                          color: currentSolutionImageIndex === 0 ? '#999' : 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: currentSolutionImageIndex === 0 ? 'not-allowed' : 'pointer',
+                          fontSize: '14px'
                         }}
-                        draggable={false}
-                        onContextMenu={(e) => e.preventDefault()}
-                      />
-                    ))}
-                  </>
-                );
-              })()}
+                      >
+                        ← 이전
+                      </button>
+                      <span style={{ fontSize: '14px', minWidth: '80px', textAlign: 'center' }}>
+                        {currentSolutionImageIndex + 1} / {solutionImages.length}
+                      </span>
+                      <button
+                        onClick={() => {
+                          setCurrentSolutionImageIndex(prev => Math.min(solutionImages.length - 1, prev + 1));
+                          setSolutionZoomLevel(1);
+                          setSolutionPanPosition({ x: 0, y: 0 });
+                        }}
+                        disabled={currentSolutionImageIndex === solutionImages.length - 1}
+                        style={{
+                          padding: '8px 16px',
+                          background: currentSolutionImageIndex === solutionImages.length - 1 ? '#f0f0f0' : '#1a1a1a',
+                          color: currentSolutionImageIndex === solutionImages.length - 1 ? '#999' : 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: currentSolutionImageIndex === solutionImages.length - 1 ? 'not-allowed' : 'pointer',
+                          fontSize: '14px'
+                        }}
+                      >
+                        다음 →
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
