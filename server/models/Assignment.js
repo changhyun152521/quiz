@@ -14,7 +14,24 @@ const assignmentSchema = new mongoose.Schema({
     type: String,
     required: [true, '과목은 필수입니다'],
     trim: true,
-    maxlength: [50, '과목은 최대 50자까지 가능합니다']
+    maxlength: [50, '과목은 최대 50자까지 가능합니다'],
+    enum: ['중1-1', '중1-2', '중2-1', '중2-2', '중3-1', '중3-2', '공통수학1', '공통수학2', '대수', '미적분1', '미적분2', '확률과통계', '기하']
+  },
+
+  // 대단원
+  mainUnit: {
+    type: String,
+    required: [true, '대단원은 필수입니다'],
+    trim: true,
+    maxlength: [100, '대단원은 최대 100자까지 가능합니다']
+  },
+
+  // 소단원
+  subUnit: {
+    type: String,
+    required: [true, '소단원은 필수입니다'],
+    trim: true,
+    maxlength: [100, '소단원은 최대 100자까지 가능합니다']
   },
 
   // 문항 수

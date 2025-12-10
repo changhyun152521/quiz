@@ -158,4 +158,12 @@ app.use('/api/answers', answerRoutes);
 const cloudinaryRoutes = require('./routes/cloudinary');
 app.use('/api/cloudinary', cloudinaryRoutes);
 
+// 학생 라우트
+const studentRoutes = require('./routes/students');
+app.use('/api/students', studentRoutes);
+
+// 메시지 라우트
+const messageRoutes = require('./routes/messages');
+app.use('/api/messages', messageRoutes);
+
 

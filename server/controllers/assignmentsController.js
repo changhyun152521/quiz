@@ -191,6 +191,8 @@ const createAssignment = async (req, res) => {
     const {
       assignmentName,
       subject,
+      mainUnit,
+      subUnit,
       questionCount,
       assignmentType,
       startDate,
@@ -201,10 +203,20 @@ const createAssignment = async (req, res) => {
     } = req.body;
 
     // 필수 필드 검증
+    // 클리닉 타입일 때는 mainUnit과 subUnit이 필수가 아님
+    const isClinic = assignmentType === '클리닉';
     if (!assignmentName || !subject || !questionCount || !assignmentType || !startDate || !dueDate) {
       return res.status(400).json({
         success: false,
         message: '모든 필수 필드를 입력해주세요'
+      });
+    }
+    
+    // QUIZ 타입일 때만 mainUnit과 subUnit 필수
+    if (!isClinic && (!mainUnit || !subUnit)) {
+      return res.status(400).json({
+        success: false,
+        message: 'QUIZ 타입일 때는 대단원과 소단원이 필수입니다'
       });
     }
 
@@ -236,9 +248,12 @@ const createAssignment = async (req, res) => {
 
     // 새 과제 생성
     // fileUrl과 fileType은 배열로 처리 (여러 파일 지원)
+    // 클리닉 타입일 때는 mainUnit과 subUnit을 빈 문자열로 설정
     const newAssignment = new Assignment({
       assignmentName,
       subject,
+      mainUnit: isClinic ? '' : mainUnit,
+      subUnit: isClinic ? '' : subUnit,
       questionCount,
       assignmentType,
       startDate: start,
@@ -277,6 +292,8 @@ const updateAssignment = async (req, res) => {
     const {
       assignmentName,
       subject,
+      mainUnit,
+      subUnit,
       questionCount,
       assignmentType,
       startDate,
@@ -289,6 +306,20 @@ const updateAssignment = async (req, res) => {
     const updateData = {};
     if (assignmentName) updateData.assignmentName = assignmentName;
     if (subject) updateData.subject = subject;
+    
+    // 과제 타입 확인
+    const isClinic = assignmentType === '클리닉';
+    
+    // 클리닉으로 변경하거나 이미 클리닉인 경우 mainUnit과 subUnit을 빈 문자열로 설정
+    if (isClinic) {
+      updateData.mainUnit = '';
+      updateData.subUnit = '';
+    } else {
+      // QUIZ 타입일 때만 mainUnit과 subUnit 업데이트
+      if (mainUnit !== undefined) updateData.mainUnit = mainUnit;
+      if (subUnit !== undefined) updateData.subUnit = subUnit;
+    }
+    
     if (questionCount !== undefined) {
       if (questionCount < 1) {
         return res.status(400).json({
