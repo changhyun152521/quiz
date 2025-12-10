@@ -392,15 +392,41 @@ function DashboardPage({ user, onLogout, onGoToMainPage, selectedCourse }) {
                     <div
                       key={assignment._id}
                       className="assignment-card"
-                      onClick={async () => {
+                      onClick={async (e) => {
+                        // 버튼이나 링크 클릭이 아닌 경우에만 카드 클릭 처리
+                        const clickedButton = e.target.closest('button');
+                        const clickedLink = e.target.closest('a');
+                        
+                        if (clickedButton || clickedLink) {
+                          console.log('버튼/링크 클릭, 카드 클릭 무시');
+                          return;
+                        }
+                        
+                        console.log('과제 카드 클릭:', assignment._id, assignment.assignmentName);
+                        console.log('과제 카드의 해설지 파일:', {
+                          hasSolutionFileUrl: !!assignment.solutionFileUrl,
+                          solutionFileUrlCount: assignment.solutionFileUrl?.length || 0,
+                          solutionFileUrl: assignment.solutionFileUrl
+                        });
+                        
                         // 이미지가 없어도 빈 캔버스로 필기할 수 있도록 상세 페이지로 이동
                         // assignment의 전체 정보(answers 포함)를 API에서 가져오기
                         try {
+                          console.log('과제 정보 API 호출 시작:', assignment._id);
                           const response = await get(`/api/assignments/${assignment._id}`);
                           const data = await response.json();
+                          console.log('과제 정보 API 응답:', data);
+                          console.log('API 응답의 해설지 파일:', {
+                            hasSolutionFileUrl: !!data.data?.solutionFileUrl,
+                            solutionFileUrlCount: data.data?.solutionFileUrl?.length || 0,
+                            solutionFileUrl: data.data?.solutionFileUrl
+                          });
+                          
                           if (data.success && data.data) {
+                            console.log('과제 상세 페이지로 이동:', data.data._id);
                             setSelectedAssignment(data.data);
                           } else {
+                            console.warn('API 응답 실패, 기존 assignment 사용:', data);
                             // API 호출 실패 시 기존 assignment 사용
                             setSelectedAssignment(assignment);
                           }
@@ -423,27 +449,31 @@ function DashboardPage({ user, onLogout, onGoToMainPage, selectedCourse }) {
                       <div className="assignment-card-body">
                         <h3 className="assignment-name">{assignment.assignmentName}</h3>
                         <div className="assignment-details">
-                          {(assignment.subject || assignment.mainUnit || assignment.subUnit) && (
+                          {(assignment.subject || assignment.mainUnit) && (
                             <div className="assignment-detail-item">
-                              <span className="detail-label">단원:</span>
+                              <span className="detail-label">단원: </span>
                               <span className="detail-value">
-                                {[assignment.subject, assignment.mainUnit, assignment.subUnit]
+                                {[assignment.subject, assignment.mainUnit]
                                   .filter(Boolean)
                                   .join(' / ')}
                               </span>
                             </div>
                           )}
+                          {assignment.subUnit && (
+                            <div className="assignment-detail-item">
+                              <span className="detail-label">소단원: </span>
+                              <span className="detail-value">{assignment.subUnit}</span>
+                            </div>
+                          )}
                           <div className="assignment-detail-item">
-                            <span className="detail-label">문항 수:</span>
+                            <span className="detail-label">문항 수: </span>
                             <span className="detail-value">{assignment.questionCount}개</span>
                           </div>
                           <div className="assignment-detail-item">
-                            <span className="detail-label">시작일:</span>
-                            <span className="detail-value">{formatDate(assignment.startDate)}</span>
-                          </div>
-                          <div className="assignment-detail-item">
-                            <span className="detail-label">제출일:</span>
-                            <span className="detail-value">{formatDate(assignment.dueDate)}</span>
+                            <span className="detail-label">기간: </span>
+                            <span className="detail-value">
+                              {formatDate(assignment.startDate)} ~ {formatDate(assignment.dueDate)}
+                            </span>
                           </div>
                         </div>
                       </div>

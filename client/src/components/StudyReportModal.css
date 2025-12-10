@@ -42,6 +42,31 @@
   font-family: 'Pretendard', sans-serif;
 }
 
+.study-report-pdf-btn {
+  background: #4a90e2;
+  color: #ffffff;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: 'Pretendard', sans-serif;
+}
+
+.study-report-pdf-btn:hover:not(:disabled) {
+  background: #357abd;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.study-report-pdf-btn:disabled {
+  background: #cccccc;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 .study-report-modal-close {
   background: none;
   border: none;
@@ -334,7 +359,9 @@
   border-top: 1px solid #e5e5e5;
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
   flex-shrink: 0;
+  flex-grow: 0;
 }
 
 .study-report-close-btn {

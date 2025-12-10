@@ -14,7 +14,7 @@ const getAllCourses = async (req, res) => {
       .populate('students', 'name userId email grade schoolName')
       .populate({
         path: 'assignments',
-        select: 'assignmentName subject mainUnit subUnit questionCount assignmentType startDate dueDate submissions',
+        select: 'assignmentName subject mainUnit subUnit questionCount assignmentType startDate dueDate submissions questionFileUrl questionFileType solutionFileUrl solutionFileType fileUrl fileType',
         populate: {
           path: 'submissions.studentId',
           select: 'name userId'
@@ -51,7 +51,7 @@ const getCourseById = async (req, res) => {
     const course = await Course.findById(req.params.id)
       .populate('teacher', 'name userId')
       .populate('students', 'name userId email grade schoolName studentPhone parentPhone')
-      .populate('assignments', 'assignmentName subject mainUnit subUnit questionCount assignmentType startDate dueDate');
+      .populate('assignments', 'assignmentName subject mainUnit subUnit questionCount assignmentType startDate dueDate questionFileUrl questionFileType solutionFileUrl solutionFileType fileUrl fileType');
 
     if (!course) {
       return res.status(404).json({
@@ -147,7 +147,7 @@ const createCourse = async (req, res) => {
     const populatedCourse = await Course.findById(savedCourse._id)
       .populate('teacher', 'name userId')
       .populate('students', 'name userId email grade schoolName')
-      .populate('assignments', 'assignmentName subject mainUnit subUnit questionCount assignmentType startDate dueDate');
+      .populate('assignments', 'assignmentName subject mainUnit subUnit questionCount assignmentType startDate dueDate questionFileUrl questionFileType solutionFileUrl solutionFileType fileUrl fileType');
 
     res.status(201).json({
       success: true,
@@ -282,7 +282,7 @@ const updateCourse = async (req, res) => {
     const populatedCourse = await Course.findById(updatedCourse._id)
       .populate('teacher', 'name userId')
       .populate('students', 'name userId email grade schoolName')
-      .populate('assignments', 'assignmentName subject mainUnit subUnit questionCount assignmentType startDate dueDate');
+      .populate('assignments', 'assignmentName subject mainUnit subUnit questionCount assignmentType startDate dueDate questionFileUrl questionFileType solutionFileUrl solutionFileType fileUrl fileType');
 
     res.json({
       success: true,
@@ -479,7 +479,7 @@ const getCoursesByStudent = async (req, res) => {
       .populate('teacher', 'name userId')
       .populate({
         path: 'assignments',
-        select: 'assignmentName subject mainUnit subUnit questionCount assignmentType startDate dueDate createdAt fileUrl fileType submissions',
+        select: 'assignmentName subject mainUnit subUnit questionCount assignmentType startDate dueDate createdAt fileUrl fileType questionFileUrl questionFileType solutionFileUrl solutionFileType submissions',
         populate: {
           path: 'submissions.studentId',
           select: 'name userId'
@@ -547,7 +547,7 @@ const addAssignmentToCourse = async (req, res) => {
     const populatedCourse = await Course.findById(updatedCourse._id)
       .populate('teacher', 'name userId')
       .populate('students', 'name userId email grade schoolName')
-      .populate('assignments', 'assignmentName subject mainUnit subUnit questionCount assignmentType startDate dueDate');
+      .populate('assignments', 'assignmentName subject mainUnit subUnit questionCount assignmentType startDate dueDate questionFileUrl questionFileType solutionFileUrl solutionFileType fileUrl fileType');
 
     res.json({
       success: true,
@@ -595,7 +595,7 @@ const removeAssignmentFromCourse = async (req, res) => {
     const populatedCourse = await Course.findById(updatedCourse._id)
       .populate('teacher', 'name userId')
       .populate('students', 'name userId email grade schoolName')
-      .populate('assignments', 'assignmentName subject mainUnit subUnit questionCount assignmentType startDate dueDate');
+      .populate('assignments', 'assignmentName subject mainUnit subUnit questionCount assignmentType startDate dueDate questionFileUrl questionFileType solutionFileUrl solutionFileType fileUrl fileType');
 
     res.json({
       success: true,

@@ -208,6 +208,37 @@ function CourseModal({ showModal, onClose, course, onSave, mode, teachers = [], 
     });
   };
 
+  // 전체 선택/해제 함수
+  const handleSelectAll = (name, items) => {
+    setFormData(prev => {
+      const currentValues = prev[name] || [];
+      const availableItems = items.map(item => item._id).filter(id => id);
+      
+      // 현재 페이지의 모든 항목이 선택되어 있는지 확인
+      const allSelected = availableItems.every(id => currentValues.includes(id));
+      
+      if (allSelected) {
+        // 모두 선택되어 있으면 현재 페이지 항목만 해제
+        return {
+          ...prev,
+          [name]: currentValues.filter(id => !availableItems.includes(id))
+        };
+      } else {
+        // 일부만 선택되어 있으면 현재 페이지 항목 모두 선택
+        const newValues = [...currentValues];
+        availableItems.forEach(id => {
+          if (!newValues.includes(id)) {
+            newValues.push(id);
+          }
+        });
+        return {
+          ...prev,
+          [name]: newValues
+        };
+      }
+    });
+  };
+
   const validateForm = () => {
     const newErrors = {};
 
@@ -422,6 +453,19 @@ function CourseModal({ showModal, onClose, course, onSave, mode, teachers = [], 
                           onChange={(e) => setStudentSearchTerm(e.target.value)}
                         />
                       </div>
+                      {paginatedStudents.length > 0 && (
+                        <div className="select-all-container" style={{ padding: '8px 12px', borderBottom: '1px solid #ddd', display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#f5f5f5' }}>
+                          <input
+                            type="checkbox"
+                            checked={paginatedStudents.length > 0 && paginatedStudents.every(student => formData.students.includes(student._id))}
+                            onChange={() => handleSelectAll('students', paginatedStudents)}
+                            style={{ cursor: 'pointer', width: '18px', height: '18px' }}
+                          />
+                          <label style={{ cursor: 'pointer', fontWeight: '500', userSelect: 'none', fontSize: '14px' }}>
+                            현재 페이지 전체 선택 ({paginatedStudents.length}명)
+                          </label>
+                        </div>
+                      )}
                 <div className="checkbox-list">
                         {paginatedStudents.length > 0 ? (
                           paginatedStudents.map((student) => (
@@ -607,6 +651,19 @@ function CourseModal({ showModal, onClose, course, onSave, mode, teachers = [], 
                           onChange={(e) => setAssignmentSearchTerm(e.target.value)}
                         />
                       </div>
+                      {paginatedAssignments.length > 0 && (
+                        <div className="select-all-container" style={{ padding: '8px 12px', borderBottom: '1px solid #ddd', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <input
+                            type="checkbox"
+                            checked={paginatedAssignments.every(assignment => formData.assignments.includes(assignment._id))}
+                            onChange={() => handleSelectAll('assignments', paginatedAssignments)}
+                            style={{ cursor: 'pointer' }}
+                          />
+                          <label style={{ cursor: 'pointer', fontWeight: '500', userSelect: 'none' }}>
+                            현재 페이지 전체 선택 ({paginatedAssignments.length}개)
+                          </label>
+                        </div>
+                      )}
                 <div className="checkbox-list">
                         {paginatedAssignments.length > 0 ? (
                           paginatedAssignments.map((assignment) => (

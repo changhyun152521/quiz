@@ -68,14 +68,40 @@ const assignmentSchema = new mongoose.Schema({
     }
   },
 
-  // 업로드된 파일 URL 배열 (Cloudinary) - 여러 파일 지원
+  // 업로드된 파일 URL 배열 (Cloudinary) - 여러 파일 지원 (하위 호환성 유지)
   fileUrl: {
     type: [String],
     default: []
   },
 
-  // 파일 타입 배열 (image/pdf) - 여러 파일 지원
+  // 파일 타입 배열 (image/pdf) - 여러 파일 지원 (하위 호환성 유지)
   fileType: {
+    type: [String],
+    enum: ['image', 'pdf'],
+    default: []
+  },
+
+  // 문제지 파일 URL 배열 (Cloudinary) - 여러 파일 지원
+  questionFileUrl: {
+    type: [String],
+    default: []
+  },
+
+  // 문제지 파일 타입 배열 (image/pdf) - 여러 파일 지원
+  questionFileType: {
+    type: [String],
+    enum: ['image', 'pdf'],
+    default: []
+  },
+
+  // 해설지 파일 URL 배열 (Cloudinary) - 여러 파일 지원
+  solutionFileUrl: {
+    type: [String],
+    default: []
+  },
+
+  // 해설지 파일 타입 배열 (image/pdf) - 여러 파일 지원
+  solutionFileType: {
     type: [String],
     enum: ['image', 'pdf'],
     default: []

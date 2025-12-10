@@ -2,6 +2,234 @@ const Assignment = require('../models/Assignment');
 const Course = require('../models/Course');
 const User = require('../models/User');
 
+// 과목별 대단원 및 소단원 순서 정의
+const unitOrder = {
+  '중1-1': {
+    mainUnits: [
+      '수와 연산',
+      '정수와 유리수',
+      '문자와 식',
+      '좌표평면과 그래프'
+    ],
+    subUnits: {
+      '수와 연산': ['소인수분해', '최대공약수와 최소공배수'],
+      '정수와 유리수': ['정수와 유리수', '정수와 유리수의 계산'],
+      '문자와 식': ['문자의 사용과 식의 계산', '일차방정식', '일차방정식의 활용'],
+      '좌표평면과 그래프': ['좌표평면과 그래프', '정비례와 반비례']
+    }
+  },
+  '중1-2': {
+    mainUnits: [
+      '기본 도형과 작도',
+      '평면도형의 성질',
+      '입체도형의 성질',
+      '자료의 정리와 해석'
+    ],
+    subUnits: {
+      '기본 도형과 작도': ['기본 도형', '위치 관계', '작도와 합동'],
+      '평면도형의 성질': ['다각형', '원과 부채꼴'],
+      '입체도형의 성질': ['다면체와 회전체', '입체도형의 겉넓이와 부피'],
+      '자료의 정리와 해석': ['자료의 정리와 해석']
+    }
+  },
+  '중2-1': {
+    mainUnits: [
+      '수와 식',
+      '부등식',
+      '방정식',
+      '함수'
+    ],
+    subUnits: {
+      '수와 식': ['유리수와 순환소수', '식의 계산'],
+      '부등식': ['일차부등식', '일차부등식의 활용'],
+      '방정식': ['연립일차방정식', '연립방정식의 풀이', '연립방정식의 활용'],
+      '함수': ['일차함수와 그래프(1)', '일차함수와 그래프(2)', '일차함수와 일차방정식의 관계']
+    }
+  },
+  '중2-2': {
+    mainUnits: [
+      '도형의 성질',
+      '도형의 닮음',
+      '확률'
+    ],
+    subUnits: {
+      '도형의 성질': ['삼각형의 성질', '사각형의 성질'],
+      '도형의 닮음': ['도형의 닮음', '닮은 도형의 성질', '피타고라스 정리'],
+      '확률': ['경우의 수와 확률']
+    }
+  },
+  '중3-1': {
+    mainUnits: [
+      '실수와 그 계산',
+      '다항식의 곱셈과 인수분해',
+      '이차방정식',
+      '이차함수'
+    ],
+    subUnits: {
+      '실수와 그 계산': ['제곱근과 실수', '근호를 포함한 식의 계산'],
+      '다항식의 곱셈과 인수분해': ['다항식의 곱셈', '다항식의 인수분해'],
+      '이차방정식': ['이차방정식의 풀이', '이차방정식의 활용'],
+      '이차함수': ['이차함수의 그래프', '이차함수의 활용']
+    }
+  },
+  '중3-2': {
+    mainUnits: [
+      '삼각비',
+      '원의 성질',
+      '통계'
+    ],
+    subUnits: {
+      '삼각비': ['삼각비', '삼각비의 활용'],
+      '원의 성질': ['원과 직선', '원주각', '원주각의 활용'],
+      '통계': ['대푯값과 산포도', '상관관계']
+    }
+  },
+  '공통수학1': {
+    mainUnits: [
+      '다항식',
+      '방정식과 부등식',
+      '경우의 수',
+      '행렬'
+    ],
+    subUnits: {
+      '다항식': ['다항식의 연산', '나머지정리', '인수분해'],
+      '방정식과 부등식': ['복소수와 이차방정식', '이차방정식과 이차함수', '여러 가지 방정식과 부등식'],
+      '경우의 수': ['합의 법칙과 곱의 법칙', '순열과 조합'],
+      '행렬': ['행렬과 그 연산']
+    }
+  },
+  '공통수학2': {
+    mainUnits: [
+      '도형의 방정식',
+      '집합과 명제',
+      '함수와 그래프'
+    ],
+    subUnits: {
+      '도형의 방정식': ['평면좌표', '직선의 방정식', '원의 방정식', '도형의 이동'],
+      '집합과 명제': ['집합', '명제'],
+      '함수와 그래프': ['함수', '유무리함수']
+    }
+  },
+  '대수': {
+    mainUnits: [
+      '지수함수와 로그함수',
+      '삼각함수',
+      '수열'
+    ],
+    subUnits: {
+      '지수함수와 로그함수': ['지수와 로그', '지수함수와 로그함수'],
+      '삼각함수': ['삼각함수', '사인법칙과 코사인법칙'],
+      '수열': ['등차수열과 등비수열', '수열의 합', '수학적 귀납법']
+    }
+  },
+  '미적분1': {
+    mainUnits: [
+      '함수의 극한과 연속',
+      '미분',
+      '적분'
+    ],
+    subUnits: {
+      '함수의 극한과 연속': ['함수의 극한', '함수의 연속'],
+      '미분': ['미분계수와 도함수', '도함수의 활용'],
+      '적분': ['부정적분과 정적분', '정적분의 활용']
+    }
+  },
+  '미적분2': {
+    mainUnits: [
+      '수열의극한',
+      '미분법',
+      '적분법'
+    ],
+    subUnits: {
+      '수열의극한': ['수열의 극한', '급수'],
+      '미분법': ['지수함수와 로그함수의 미분', '삼각함수의 미분', '여러가지 미분법', '도함수의 활용'],
+      '적분법': ['여러가지 함수의 적분', '치환적분과 부분적분법', '정적분의 활용']
+    }
+  },
+  '확률과통계': {
+    mainUnits: [
+      '순열과 조합',
+      '확률',
+      '통계'
+    ],
+    subUnits: {
+      '순열과 조합': ['순열', '조합'],
+      '확률': ['확률의 뜻과 활용', '조건부확률'],
+      '통계': ['확률분포', '통계적추정']
+    }
+  },
+  '기하': {
+    mainUnits: [
+      '이차곡선',
+      '공간도형과 공간좌표',
+      '벡터'
+    ],
+    subUnits: {
+      '이차곡선': ['포물선, 타원, 쌍곡선', '이차곡선의 접선'],
+      '공간도형과 공간좌표': ['직선과 평면의 위치관계', '삼수선 정리', '정사영', '좌표공간의 거리 및 내분점', '구의 방정식'],
+      '벡터': ['백터의 덧셈, 뺄셈, 실수배', '내적 계산', '평면의 방정식']
+    }
+  }
+};
+
+// 소단원별 통계 정렬 함수
+function sortSubUnitStats(stats) {
+  return stats.sort((a, b) => {
+    // 1. 과목 순서 비교
+    const subjectOrder = Object.keys(unitOrder);
+    const subjectIndexA = subjectOrder.indexOf(a.subject);
+    const subjectIndexB = subjectOrder.indexOf(b.subject);
+    
+    if (subjectIndexA !== subjectIndexB) {
+      // 과목이 정의되지 않은 경우 맨 뒤로
+      if (subjectIndexA === -1) return 1;
+      if (subjectIndexB === -1) return -1;
+      return subjectIndexA - subjectIndexB;
+    }
+    
+    // 같은 과목인 경우
+    const subjectData = unitOrder[a.subject];
+    if (!subjectData) {
+      // 과목 데이터가 없으면 문자열 비교
+      if (a.mainUnit !== b.mainUnit) {
+        return (a.mainUnit || '').localeCompare(b.mainUnit || '');
+      }
+      return (a.subUnit || '').localeCompare(b.subUnit || '');
+    }
+    
+    // 2. 대단원 순서 비교
+    const mainUnitIndexA = subjectData.mainUnits.indexOf(a.mainUnit);
+    const mainUnitIndexB = subjectData.mainUnits.indexOf(b.mainUnit);
+    
+    if (mainUnitIndexA !== mainUnitIndexB) {
+      // 대단원이 정의되지 않은 경우 맨 뒤로
+      if (mainUnitIndexA === -1) return 1;
+      if (mainUnitIndexB === -1) return -1;
+      return mainUnitIndexA - mainUnitIndexB;
+    }
+    
+    // 같은 대단원인 경우
+    const subUnits = subjectData.subUnits[a.mainUnit];
+    if (!subUnits) {
+      // 소단원 데이터가 없으면 문자열 비교
+      return (a.subUnit || '').localeCompare(b.subUnit || '');
+    }
+    
+    // 3. 소단원 순서 비교
+    const subUnitIndexA = subUnits.indexOf(a.subUnit);
+    const subUnitIndexB = subUnits.indexOf(b.subUnit);
+    
+    if (subUnitIndexA !== subUnitIndexB) {
+      // 소단원이 정의되지 않은 경우 맨 뒤로
+      if (subUnitIndexA === -1) return 1;
+      if (subUnitIndexB === -1) return -1;
+      return subUnitIndexA - subUnitIndexB;
+    }
+    
+    return 0;
+  });
+}
+
 // GET /api/students/:studentId/study-report - 학생 학습현황 보고서
 const getStudyReport = async (req, res) => {
   try {
@@ -153,8 +381,8 @@ const getStudyReport = async (req, res) => {
       }
     });
 
-    // 소단원별 통계 배열로 변환
-    const subUnitStats = Array.from(subUnitStatsMap.values());
+    // 소단원별 통계 배열로 변환 및 정렬
+    const subUnitStats = sortSubUnitStats(Array.from(subUnitStatsMap.values()));
 
     // 취약 단원 찾기 (정답률이 70% 미만인 단원)
     const weakUnits = subUnitStats

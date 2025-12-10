@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { get, post } from '../utils/api';
 import './AssignmentModal.css';
 
@@ -104,16 +104,25 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
     assignmentType: 'QUIZ',
     startDate: '',
     dueDate: '',
-    fileUrl: [], // 여러 파일 지원을 위해 배열로 변경
-    fileType: [], // 여러 파일 지원을 위해 배열로 변경
+    fileUrl: [], // 여러 파일 지원을 위해 배열로 변경 (하위 호환성 유지)
+    fileType: [], // 여러 파일 지원을 위해 배열로 변경 (하위 호환성 유지)
+    questionFileUrl: [], // 문제지 파일 URL 배열
+    questionFileType: [], // 문제지 파일 타입 배열
+    solutionFileUrl: [], // 해설지 파일 URL 배열
+    solutionFileType: [], // 해설지 파일 타입 배열
     answers: [] // 정답 배열 추가
   });
   const [availableMainUnits, setAvailableMainUnits] = useState([]);
   const [availableSubUnits, setAvailableSubUnits] = useState([]);
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [previewFiles, setPreviewFiles] = useState([]); // 여러 파일 미리보기를 위한 배열
+  const [previewFiles, setPreviewFiles] = useState([]); // 여러 파일 미리보기를 위한 배열 (하위 호환성 유지)
+  const [previewQuestionFiles, setPreviewQuestionFiles] = useState([]); // 문제지 파일 미리보기 배열
+  const [previewSolutionFiles, setPreviewSolutionFiles] = useState([]); // 해설지 파일 미리보기 배열
   const [cloudinaryWidget, setCloudinaryWidget] = useState(null);
+  const [currentUploadType, setCurrentUploadType] = useState(null); // 'question' 또는 'solution'
+  const currentUploadTypeRef = useRef(null); // 위젯 콜백에서 참조할 수 있는 ref
+  const currentFormIdRef = useRef(null); // 현재 파일 업로드 중인 폼 ID
   
   // 각 폼별 대단원/소단원 목록
   const [formMainUnits, setFormMainUnits] = useState([[]]);
@@ -132,8 +141,14 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
     dueDate: '',
     fileUrl: [],
     fileType: [],
+    questionFileUrl: [],
+    questionFileType: [],
+    solutionFileUrl: [],
+    solutionFileType: [],
     answers: [],
     previewFiles: [],
+    previewQuestionFiles: [],
+    previewSolutionFiles: [],
     availableMainUnits: [],
     availableSubUnits: []
   }]);
@@ -295,30 +310,127 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
                   // 업로드 순서를 보장하기 위해 타임스탬프 추가
                   const uploadTime = Date.now();
                   
-                  // 기존 파일 배열에 새 파일 추가 (순서 보장)
-                  setFormData(prev => ({
-                    ...prev,
-                    fileUrl: [...(prev.fileUrl || []), fileUrl],
-                    fileType: [...(prev.fileType || []), fileType]
-                  }));
+                  // currentUploadTypeRef를 통해 현재 업로드 타입 확인 (위젯 콜백에서 클로저로 접근)
+                  const uploadType = currentUploadTypeRef.current;
+                  const formId = currentFormIdRef.current; // 현재 업로드 중인 폼 ID
+                  console.log('파일 업로드 처리:', { uploadType, formId, fileUrl, fileType, originalFilename });
                   
-                  // 미리보기 파일 목록에 추가 (순서 정보 포함)
-                  setPreviewFiles(prev => {
-                    const newFiles = [...prev, {
-                      url: fileUrl,
-                      type: fileType,
-                      name: originalFilename || '파일',
-                      order: uploadTime // 업로드 순서를 타임스탬프로 저장
-                    }];
-                    // 업로드 순서대로 정렬
-                    return newFiles.sort((a, b) => (a.order || 0) - (b.order || 0));
-                  });
+                  // 여러 폼 추가 모드인 경우 (formId가 있으면)
+                  if (formId !== null && formId !== undefined) {
+                    if (uploadType === 'question') {
+                      console.log('여러 폼 모드 - 문제지 파일로 저장:', formId);
+                      setMultipleForms(prev => prev.map(form => {
+                        if (form.id === formId) {
+                          return {
+                            ...form,
+                            questionFileUrl: [...(form.questionFileUrl || []), fileUrl],
+                            questionFileType: [...(form.questionFileType || []), fileType],
+                            previewQuestionFiles: [
+                              ...(form.previewQuestionFiles || []),
+                              {
+                                url: fileUrl,
+                                type: fileType,
+                                name: originalFilename || '파일',
+                                order: uploadTime
+                              }
+                            ].sort((a, b) => (a.order || 0) - (b.order || 0))
+                          };
+                        }
+                        return form;
+                      }));
+                    } else if (uploadType === 'solution') {
+                      console.log('여러 폼 모드 - 해설지 파일로 저장:', formId);
+                      setMultipleForms(prev => prev.map(form => {
+                        if (form.id === formId) {
+                          return {
+                            ...form,
+                            solutionFileUrl: [...(form.solutionFileUrl || []), fileUrl],
+                            solutionFileType: [...(form.solutionFileType || []), fileType],
+                            previewSolutionFiles: [
+                              ...(form.previewSolutionFiles || []),
+                              {
+                                url: fileUrl,
+                                type: fileType,
+                                name: originalFilename || '파일',
+                                order: uploadTime
+                              }
+                            ].sort((a, b) => (a.order || 0) - (b.order || 0))
+                          };
+                        }
+                        return form;
+                      }));
+                    }
+                  } else if (uploadType === 'question') {
+                    // 단일 폼 모드 - 문제지 파일로 저장
+                    console.log('단일 폼 모드 - 문제지 파일로 저장');
+                    setFormData(prev => ({
+                      ...prev,
+                      questionFileUrl: [...(prev.questionFileUrl || []), fileUrl],
+                      questionFileType: [...(prev.questionFileType || []), fileType]
+                    }));
+                    
+                    // 문제지 미리보기 파일 목록에 추가
+                    setPreviewQuestionFiles(prev => {
+                      const newFiles = [...prev, {
+                        url: fileUrl,
+                        type: fileType,
+                        name: originalFilename || '파일',
+                        order: uploadTime
+                      }];
+                      console.log('문제지 미리보기 파일 목록 업데이트:', newFiles);
+                      return newFiles.sort((a, b) => (a.order || 0) - (b.order || 0));
+                    });
+                  } else if (uploadType === 'solution') {
+                    // 단일 폼 모드 - 해설지 파일로 저장
+                    console.log('단일 폼 모드 - 해설지 파일로 저장');
+                    setFormData(prev => ({
+                      ...prev,
+                      solutionFileUrl: [...(prev.solutionFileUrl || []), fileUrl],
+                      solutionFileType: [...(prev.solutionFileType || []), fileType]
+                    }));
+                    
+                    // 해설지 미리보기 파일 목록에 추가
+                    setPreviewSolutionFiles(prev => {
+                      const newFiles = [...prev, {
+                        url: fileUrl,
+                        type: fileType,
+                        name: originalFilename || '파일',
+                        order: uploadTime
+                      }];
+                      console.log('해설지 미리보기 파일 목록 업데이트:', newFiles);
+                      return newFiles.sort((a, b) => (a.order || 0) - (b.order || 0));
+                    });
+                  } else {
+                    // 하위 호환성을 위해 기존 방식도 유지
+                    setFormData(prev => ({
+                      ...prev,
+                      fileUrl: [...(prev.fileUrl || []), fileUrl],
+                      fileType: [...(prev.fileType || []), fileType]
+                    }));
+                    
+                    setPreviewFiles(prev => {
+                      const newFiles = [...prev, {
+                        url: fileUrl,
+                        type: fileType,
+                        name: originalFilename || '파일',
+                        order: uploadTime
+                      }];
+                      return newFiles.sort((a, b) => (a.order || 0) - (b.order || 0));
+                    });
+                  }
+                  
+                  // 업로드 완료 후 currentUploadType은 유지 (여러 파일 업로드 시 필요)
+                  // 위젯이 닫힐 때만 초기화
                 } else if (result.event === 'batch-cancelled') {
                   // 배치 업로드 취소
                   console.log('파일 업로드가 취소되었습니다.');
+                  currentUploadTypeRef.current = null;
+                  setCurrentUploadType(null);
                 } else if (result.event === 'close') {
                   // 사용자가 업로드 위젯을 닫은 경우
                   console.log('업로드 위젯이 닫혔습니다.');
+                  currentUploadTypeRef.current = null;
+                  setCurrentUploadType(null);
                 }
               } else if (error) {
                 console.error('Cloudinary 업로드 오류:', error);
@@ -399,6 +511,22 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
           ? assignment.fileType 
           : (assignment.fileType ? [assignment.fileType] : []);
 
+        // 문제지 파일 (새로운 필드 우선, 없으면 기존 fileUrl 사용)
+        const questionFileUrls = Array.isArray(assignment.questionFileUrl) && assignment.questionFileUrl.length > 0
+          ? assignment.questionFileUrl
+          : fileUrls; // 하위 호환성: 기존 fileUrl 사용
+        const questionFileTypes = Array.isArray(assignment.questionFileType) && assignment.questionFileType.length > 0
+          ? assignment.questionFileType
+          : fileTypes; // 하위 호환성: 기존 fileType 사용
+
+        // 해설지 파일
+        const solutionFileUrls = Array.isArray(assignment.solutionFileUrl) 
+          ? assignment.solutionFileUrl 
+          : [];
+        const solutionFileTypes = Array.isArray(assignment.solutionFileType) 
+          ? assignment.solutionFileType 
+          : [];
+
         // 정답 배열 초기화
         const questionCount = assignment.questionCount || 0;
         const existingAnswers = assignment.answers || [];
@@ -445,19 +573,42 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
           assignmentType: assignmentType,
           startDate: formatDate(assignment.startDate),
           dueDate: formatDate(assignment.dueDate),
-          fileUrl: fileUrls,
-          fileType: fileTypes,
+          fileUrl: fileUrls, // 하위 호환성 유지
+          fileType: fileTypes, // 하위 호환성 유지
+          questionFileUrl: questionFileUrls,
+          questionFileType: questionFileTypes,
+          solutionFileUrl: solutionFileUrls,
+          solutionFileType: solutionFileTypes,
           answers: initialAnswers
         });
         
-        // 미리보기 파일 목록 설정 (업로드 순서 유지)
+        // 문제지 미리보기 파일 목록 설정
+        const previewQuestionFilesList = questionFileUrls.map((url, index) => ({
+          url: url,
+          type: questionFileTypes[index] || 'image',
+          name: `문제지 파일 ${index + 1}`,
+          order: index
+        }));
+        previewQuestionFilesList.sort((a, b) => (a.order || 0) - (b.order || 0));
+        setPreviewQuestionFiles(previewQuestionFilesList);
+        
+        // 해설지 미리보기 파일 목록 설정 (문제지 파일과 동일한 형식)
+        const previewSolutionFilesList = solutionFileUrls.map((url, index) => ({
+          url: url,
+          type: solutionFileTypes[index] || 'image',
+          name: `해설지 파일 ${index + 1}`,
+          order: index
+        }));
+        previewSolutionFilesList.sort((a, b) => (a.order || 0) - (b.order || 0));
+        setPreviewSolutionFiles(previewSolutionFilesList);
+        
+        // 하위 호환성을 위한 기존 미리보기 파일 목록 설정
         const previewFilesList = fileUrls.map((url, index) => ({
           url: url,
           type: fileTypes[index] || 'image',
           name: `파일 ${index + 1}`,
-          order: index // 배열 인덱스를 순서로 사용
+          order: index
         }));
-        // 순서대로 정렬 (이미 정렬되어 있지만 확실히 하기 위해)
         previewFilesList.sort((a, b) => (a.order || 0) - (b.order || 0));
         setPreviewFiles(previewFilesList);
       } else {
@@ -472,9 +623,15 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
           dueDate: '',
           fileUrl: [],
           fileType: [],
+          questionFileUrl: [],
+          questionFileType: [],
+          solutionFileUrl: [],
+          solutionFileType: [],
           answers: []
         });
         setPreviewFiles([]);
+        setPreviewQuestionFiles([]);
+        setPreviewSolutionFiles([]);
         setAvailableMainUnits([]);
         setAvailableSubUnits([]);
       }
@@ -657,6 +814,33 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
     return Object.keys(newErrors).length === 0;
   };
 
+  // 폼 리셋 함수
+  const resetForm = () => {
+    setFormData({
+      assignmentName: '',
+      subject: '',
+      mainUnit: '',
+      subUnit: '',
+      questionCount: '',
+      assignmentType: 'QUIZ',
+      startDate: '',
+      dueDate: '',
+      fileUrl: [],
+      fileType: [],
+      questionFileUrl: [],
+      questionFileType: [],
+      solutionFileUrl: [],
+      solutionFileType: [],
+      answers: []
+    });
+    setPreviewFiles([]);
+    setPreviewQuestionFiles([]);
+    setPreviewSolutionFiles([]);
+    setAvailableMainUnits([]);
+    setAvailableSubUnits([]);
+    setErrors({});
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -665,11 +849,11 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
     }
 
     // 이미지가 없을 때 확인 메시지 표시
-    const hasFiles = formData.fileUrl && formData.fileUrl.length > 0;
+    const hasFiles = formData.questionFileUrl && formData.questionFileUrl.length > 0;
     if (!hasFiles) {
       const confirmMessage = mode === 'edit' 
-        ? '이미지가 업로드되어 있지 않습니다. 이미지 없이 과제를 수정하시겠습니까?'
-        : '이미지가 업로드되어 있지 않습니다. 이미지 없이 과제를 등록하시겠습니까?';
+        ? '문제지 파일이 업로드되어 있지 않습니다. 문제지 파일 없이 과제를 수정하시겠습니까?'
+        : '문제지 파일이 업로드되어 있지 않습니다. 문제지 파일 없이 과제를 등록하시겠습니까?';
       
       const userConfirmed = window.confirm(confirmMessage);
       if (!userConfirmed) {
@@ -677,13 +861,29 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
       }
     }
 
+    // 전송할 데이터 확인 (디버깅)
+    console.log('[AssignmentModal] 제출할 formData:', {
+      questionFileUrl: formData.questionFileUrl,
+      questionFileType: formData.questionFileType,
+      solutionFileUrl: formData.solutionFileUrl,
+      solutionFileType: formData.solutionFileType,
+      mode: mode,
+      assignmentId: mode === 'edit' ? assignment._id : null
+    });
+
     setIsSubmitting(true);
 
     try {
       await onSave(formData, mode === 'edit' ? assignment._id : null);
-      // 성공적으로 완료된 경우에만 모달 닫기
       setIsSubmitting(false);
-      onClose();
+      
+      if (mode === 'create') {
+        // 생성 모드일 때는 폼 리셋하고 모달은 열어둠
+        resetForm();
+      } else {
+        // 수정 모드일 때는 모달 닫기
+        onClose();
+      }
     } catch (error) {
       console.error('저장 오류:', error);
       setIsSubmitting(false);
@@ -723,7 +923,10 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
             subjectUnits={subjectUnits}
             subjects={subjects}
             cloudinaryWidget={cloudinaryWidget}
-            setCloudinaryWidget={setCloudinaryWidget}
+            currentUploadTypeRef={currentUploadTypeRef}
+            currentFormIdRef={currentFormIdRef}
+            setCurrentUploadType={setCurrentUploadType}
+            setMultipleForms={setMultipleForms}
           />
         ) : (
           <form onSubmit={handleSubmit} className="assignment-modal-form">
@@ -852,42 +1055,46 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
             </div>
           </div>
 
+          {/* 문제지 파일 업로드 */}
           <div className="form-group file-upload-group">
-            <label>파일 업로드 (이미지 또는 PDF)</label>
+            <label>문제지 파일 업로드 (이미지 또는 PDF)</label>
             <div className="file-upload-section">
               <button
                 type="button"
                 className="upload-btn"
                 onClick={() => {
                   if (cloudinaryWidget) {
+                    console.log('문제지 파일 선택 버튼 클릭');
+                    currentUploadTypeRef.current = 'question';
+                    setCurrentUploadType('question');
                     cloudinaryWidget.open();
                   } else {
                     alert('Cloudinary 위젯이 로드되지 않았습니다. 페이지를 새로고침해주세요.');
                   }
                 }}
               >
-                파일 선택
+                문제지 파일 선택
               </button>
-              {previewFiles.length > 0 && (
+              {previewQuestionFiles.length > 0 && (
                 <button
                   type="button"
                   className="remove-file-btn"
                   onClick={() => {
                     setFormData(prev => ({
                       ...prev,
-                      fileUrl: [],
-                      fileType: []
+                      questionFileUrl: [],
+                      questionFileType: []
                     }));
-                    setPreviewFiles([]);
+                    setPreviewQuestionFiles([]);
                   }}
                 >
-                  모든 파일 제거
+                  모든 문제지 파일 제거
                 </button>
               )}
             </div>
-            {previewFiles.length > 0 && (
+            {previewQuestionFiles.length > 0 && (
               <div className="files-preview-container">
-                {previewFiles
+                {previewQuestionFiles
                   .sort((a, b) => (a.order || 0) - (b.order || 0)) // 업로드 순서대로 정렬
                   .map((file, index) => (
                   <div key={index} className="file-preview-item">
@@ -904,7 +1111,7 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
                             // 위로 이동
                             if (index === 0) return; // 첫 번째 파일은 위로 이동 불가
                             
-                            const sortedFiles = [...previewFiles].sort((a, b) => (a.order || 0) - (b.order || 0));
+                            const sortedFiles = [...previewQuestionFiles].sort((a, b) => (a.order || 0) - (b.order || 0));
                             const currentFile = sortedFiles[index];
                             const prevFile = sortedFiles[index - 1];
                             
@@ -918,12 +1125,12 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
                               return f;
                             }).sort((a, b) => (a.order || 0) - (b.order || 0));
                             
-                            // formData의 fileUrl과 fileType도 순서 변경
-                            const currentUrlIndex = formData.fileUrl.findIndex(url => url === currentFile.url);
-                            const prevUrlIndex = formData.fileUrl.findIndex(url => url === prevFile.url);
+                            // formData의 questionFileUrl과 questionFileType도 순서 변경
+                            const currentUrlIndex = formData.questionFileUrl.findIndex(url => url === currentFile.url);
+                            const prevUrlIndex = formData.questionFileUrl.findIndex(url => url === prevFile.url);
                             
-                            const newFileUrls = [...formData.fileUrl];
-                            const newFileTypes = [...formData.fileType];
+                            const newFileUrls = [...formData.questionFileUrl];
+                            const newFileTypes = [...formData.questionFileType];
                             
                             // 배열에서 위치 교환
                             [newFileUrls[currentUrlIndex], newFileUrls[prevUrlIndex]] = 
@@ -933,10 +1140,10 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
                             
                             setFormData(prev => ({
                               ...prev,
-                              fileUrl: newFileUrls,
-                              fileType: newFileTypes
+                              questionFileUrl: newFileUrls,
+                              questionFileType: newFileTypes
                             }));
-                            setPreviewFiles(newPreviewFiles);
+                            setPreviewQuestionFiles(newPreviewFiles);
                           }}
                           disabled={index === 0}
                           title="위로 이동"
@@ -948,7 +1155,7 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
                           className="move-file-btn move-down-btn"
                           onClick={() => {
                             // 아래로 이동
-                            const sortedFiles = [...previewFiles].sort((a, b) => (a.order || 0) - (b.order || 0));
+                            const sortedFiles = [...previewQuestionFiles].sort((a, b) => (a.order || 0) - (b.order || 0));
                             if (index === sortedFiles.length - 1) return; // 마지막 파일은 아래로 이동 불가
                             
                             const currentFile = sortedFiles[index];
@@ -964,12 +1171,12 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
                               return f;
                             }).sort((a, b) => (a.order || 0) - (b.order || 0));
                             
-                            // formData의 fileUrl과 fileType도 순서 변경
-                            const currentUrlIndex = formData.fileUrl.findIndex(url => url === currentFile.url);
-                            const nextUrlIndex = formData.fileUrl.findIndex(url => url === nextFile.url);
+                            // formData의 questionFileUrl과 questionFileType도 순서 변경
+                            const currentUrlIndex = formData.questionFileUrl.findIndex(url => url === currentFile.url);
+                            const nextUrlIndex = formData.questionFileUrl.findIndex(url => url === nextFile.url);
                             
-                            const newFileUrls = [...formData.fileUrl];
-                            const newFileTypes = [...formData.fileType];
+                            const newFileUrls = [...formData.questionFileUrl];
+                            const newFileTypes = [...formData.questionFileType];
                             
                             // 배열에서 위치 교환
                             [newFileUrls[currentUrlIndex], newFileUrls[nextUrlIndex]] = 
@@ -979,12 +1186,12 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
                             
                             setFormData(prev => ({
                               ...prev,
-                              fileUrl: newFileUrls,
-                              fileType: newFileTypes
+                              questionFileUrl: newFileUrls,
+                              questionFileType: newFileTypes
                             }));
-                            setPreviewFiles(newPreviewFiles);
+                            setPreviewQuestionFiles(newPreviewFiles);
                           }}
-                          disabled={index === previewFiles.length - 1}
+                          disabled={index === previewQuestionFiles.length - 1}
                           title="아래로 이동"
                         >
                           ↓
@@ -995,26 +1202,256 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
                           onClick={() => {
                             // 특정 파일 제거
                             // 정렬된 파일 목록에서 인덱스 찾기
-                            const sortedFiles = [...previewFiles].sort((a, b) => (a.order || 0) - (b.order || 0));
+                            const sortedFiles = [...previewQuestionFiles].sort((a, b) => (a.order || 0) - (b.order || 0));
                             const fileToRemove = sortedFiles[index];
                             
-                            // fileUrl과 fileType에서 해당 파일 제거
-                            const fileUrlIndex = formData.fileUrl.findIndex(url => url === fileToRemove.url);
-                            const newFileUrls = formData.fileUrl.filter((_, i) => i !== fileUrlIndex);
-                            const newFileTypes = formData.fileType.filter((_, i) => i !== fileUrlIndex);
+                            // questionFileUrl과 questionFileType에서 해당 파일 제거
+                            const fileUrlIndex = formData.questionFileUrl.findIndex(url => url === fileToRemove.url);
+                            const newFileUrls = formData.questionFileUrl.filter((_, i) => i !== fileUrlIndex);
+                            const newFileTypes = formData.questionFileType.filter((_, i) => i !== fileUrlIndex);
                             
                             // 미리보기 파일 목록에서 제거하고 순서 재정렬
-                            const newPreviewFiles = previewFiles
+                            const newPreviewFiles = previewQuestionFiles
                               .filter(file => file.url !== fileToRemove.url)
                               .map((file, idx) => ({ ...file, order: idx })) // 순서 재설정
                               .sort((a, b) => (a.order || 0) - (b.order || 0));
                             
                             setFormData(prev => ({
                               ...prev,
-                              fileUrl: newFileUrls,
-                              fileType: newFileTypes
+                              questionFileUrl: newFileUrls,
+                              questionFileType: newFileTypes
                             }));
-                            setPreviewFiles(newPreviewFiles);
+                            setPreviewQuestionFiles(newPreviewFiles);
+                          }}
+                          title="파일 제거"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    </div>
+                    <div className="file-preview">
+                      {file.type === 'image' ? (
+                        <img src={file.url} alt={`미리보기 ${index + 1}`} className="preview-image" />
+                      ) : file.type === 'pdf' ? (
+                        <div className="preview-pdf">
+                          <iframe
+                            src={file.url}
+                            title={`PDF 미리보기 ${index + 1}`}
+                            className="preview-iframe"
+                            type="application/pdf"
+                            onError={(e) => {
+                              console.error('PDF iframe 로드 오류:', e);
+                            }}
+                            onLoad={() => {
+                              console.log(`PDF 미리보기 ${index + 1} 로드 완료`);
+                            }}
+                          />
+                          <div style={{ marginTop: '12px', display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                            <a
+                              href={file.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="pdf-link"
+                            >
+                              새 창에서 PDF 열기
+                            </a>
+                            <a
+                              href={file.url}
+                              download
+                              className="pdf-link"
+                              style={{ background: '#666' }}
+                            >
+                              PDF 다운로드
+                            </a>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="preview-unknown">
+                          <p style={{ marginBottom: '12px', color: '#666' }}>파일이 업로드되었습니다.</p>
+                          <a
+                            href={file.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="pdf-link"
+                          >
+                            파일 열기
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 해설지 파일 업로드 */}
+          <div className="form-group file-upload-group">
+            <label>해설지 파일 업로드 (이미지 또는 PDF)</label>
+            <div className="file-upload-section">
+              <button
+                type="button"
+                className="upload-btn"
+                onClick={() => {
+                  if (cloudinaryWidget) {
+                    console.log('해설지 파일 선택 버튼 클릭');
+                    currentUploadTypeRef.current = 'solution';
+                    setCurrentUploadType('solution');
+                    cloudinaryWidget.open();
+                  } else {
+                    alert('Cloudinary 위젯이 로드되지 않았습니다. 페이지를 새로고침해주세요.');
+                  }
+                }}
+              >
+                해설지 파일 선택
+              </button>
+              {previewSolutionFiles.length > 0 && (
+                <button
+                  type="button"
+                  className="remove-file-btn"
+                  onClick={() => {
+                    setFormData(prev => ({
+                      ...prev,
+                      solutionFileUrl: [],
+                      solutionFileType: []
+                    }));
+                    setPreviewSolutionFiles([]);
+                  }}
+                >
+                  모든 해설지 파일 제거
+                </button>
+              )}
+            </div>
+            {previewSolutionFiles.length > 0 && (
+              <div className="files-preview-container">
+                {previewSolutionFiles
+                  .sort((a, b) => (a.order || 0) - (b.order || 0)) // 업로드 순서대로 정렬
+                  .map((file, index) => (
+                  <div key={index} className="file-preview-item">
+                    <div className="file-preview-header">
+                      <div className="file-header-left">
+                        <span className="file-order-number">{index + 1}</span>
+                        <span className="file-name">{file.name}</span>
+                      </div>
+                      <div className="file-header-actions">
+                        <button
+                          type="button"
+                          className="move-file-btn move-up-btn"
+                          onClick={() => {
+                            // 위로 이동
+                            if (index === 0) return; // 첫 번째 파일은 위로 이동 불가
+                            
+                            const sortedFiles = [...previewSolutionFiles].sort((a, b) => (a.order || 0) - (b.order || 0));
+                            const currentFile = sortedFiles[index];
+                            const prevFile = sortedFiles[index - 1];
+                            
+                            // 순서 교환
+                            const newPreviewFiles = sortedFiles.map(f => {
+                              if (f.url === currentFile.url) {
+                                return { ...f, order: prevFile.order };
+                              } else if (f.url === prevFile.url) {
+                                return { ...f, order: currentFile.order };
+                              }
+                              return f;
+                            }).sort((a, b) => (a.order || 0) - (b.order || 0));
+                            
+                            // formData의 solutionFileUrl과 solutionFileType도 순서 변경
+                            const currentUrlIndex = formData.solutionFileUrl.findIndex(url => url === currentFile.url);
+                            const prevUrlIndex = formData.solutionFileUrl.findIndex(url => url === prevFile.url);
+                            
+                            const newFileUrls = [...formData.solutionFileUrl];
+                            const newFileTypes = [...formData.solutionFileType];
+                            
+                            // 배열에서 위치 교환
+                            [newFileUrls[currentUrlIndex], newFileUrls[prevUrlIndex]] = 
+                              [newFileUrls[prevUrlIndex], newFileUrls[currentUrlIndex]];
+                            [newFileTypes[currentUrlIndex], newFileTypes[prevUrlIndex]] = 
+                              [newFileTypes[prevUrlIndex], newFileTypes[currentUrlIndex]];
+                            
+                            setFormData(prev => ({
+                              ...prev,
+                              solutionFileUrl: newFileUrls,
+                              solutionFileType: newFileTypes
+                            }));
+                            setPreviewSolutionFiles(newPreviewFiles);
+                          }}
+                          disabled={index === 0}
+                          title="위로 이동"
+                        >
+                          ↑
+                        </button>
+                        <button
+                          type="button"
+                          className="move-file-btn move-down-btn"
+                          onClick={() => {
+                            // 아래로 이동
+                            const sortedFiles = [...previewSolutionFiles].sort((a, b) => (a.order || 0) - (b.order || 0));
+                            if (index === sortedFiles.length - 1) return; // 마지막 파일은 아래로 이동 불가
+                            
+                            const currentFile = sortedFiles[index];
+                            const nextFile = sortedFiles[index + 1];
+                            
+                            // 순서 교환
+                            const newPreviewFiles = sortedFiles.map(f => {
+                              if (f.url === currentFile.url) {
+                                return { ...f, order: nextFile.order };
+                              } else if (f.url === nextFile.url) {
+                                return { ...f, order: currentFile.order };
+                              }
+                              return f;
+                            }).sort((a, b) => (a.order || 0) - (b.order || 0));
+                            
+                            // formData의 solutionFileUrl과 solutionFileType도 순서 변경
+                            const currentUrlIndex = formData.solutionFileUrl.findIndex(url => url === currentFile.url);
+                            const nextUrlIndex = formData.solutionFileUrl.findIndex(url => url === nextFile.url);
+                            
+                            const newFileUrls = [...formData.solutionFileUrl];
+                            const newFileTypes = [...formData.solutionFileType];
+                            
+                            // 배열에서 위치 교환
+                            [newFileUrls[currentUrlIndex], newFileUrls[nextUrlIndex]] = 
+                              [newFileUrls[nextUrlIndex], newFileUrls[currentUrlIndex]];
+                            [newFileTypes[currentUrlIndex], newFileTypes[nextUrlIndex]] = 
+                              [newFileTypes[nextUrlIndex], newFileTypes[currentUrlIndex]];
+                            
+                            setFormData(prev => ({
+                              ...prev,
+                              solutionFileUrl: newFileUrls,
+                              solutionFileType: newFileTypes
+                            }));
+                            setPreviewSolutionFiles(newPreviewFiles);
+                          }}
+                          disabled={index === previewSolutionFiles.length - 1}
+                          title="아래로 이동"
+                        >
+                          ↓
+                        </button>
+                        <button
+                          type="button"
+                          className="remove-single-file-btn"
+                          onClick={() => {
+                            // 특정 파일 제거
+                            // 정렬된 파일 목록에서 인덱스 찾기
+                            const sortedFiles = [...previewSolutionFiles].sort((a, b) => (a.order || 0) - (b.order || 0));
+                            const fileToRemove = sortedFiles[index];
+                            
+                            // solutionFileUrl과 solutionFileType에서 해당 파일 제거
+                            const fileUrlIndex = formData.solutionFileUrl.findIndex(url => url === fileToRemove.url);
+                            const newFileUrls = formData.solutionFileUrl.filter((_, i) => i !== fileUrlIndex);
+                            const newFileTypes = formData.solutionFileType.filter((_, i) => i !== fileUrlIndex);
+                            
+                            // 미리보기 파일 목록에서 제거하고 순서 재정렬
+                            const newPreviewFiles = previewSolutionFiles
+                              .filter(file => file.url !== fileToRemove.url)
+                              .map((file, idx) => ({ ...file, order: idx })) // 순서 재설정
+                              .sort((a, b) => (a.order || 0) - (b.order || 0));
+                            
+                            setFormData(prev => ({
+                              ...prev,
+                              solutionFileUrl: newFileUrls,
+                              solutionFileType: newFileTypes
+                            }));
+                            setPreviewSolutionFiles(newPreviewFiles);
                           }}
                           title="파일 제거"
                         >
@@ -1154,7 +1591,12 @@ function MultipleAssignmentForm({
   isSubmitting, 
   setIsSubmitting,
   subjectUnits,
-  subjects
+  subjects,
+  cloudinaryWidget,
+  currentUploadTypeRef,
+  currentFormIdRef,
+  setCurrentUploadType,
+  setMultipleForms
 }) {
   const [errors, setErrors] = useState({});
 
@@ -1172,8 +1614,14 @@ function MultipleAssignmentForm({
       dueDate: '',
       fileUrl: [],
       fileType: [],
+      questionFileUrl: [],
+      questionFileType: [],
+      solutionFileUrl: [],
+      solutionFileType: [],
       answers: [],
       previewFiles: [],
+      previewQuestionFiles: [],
+      previewSolutionFiles: [],
       availableMainUnits: [],
       availableSubUnits: []
     }]);
@@ -1366,6 +1814,10 @@ function MultipleAssignmentForm({
             dueDate: form.dueDate,
             fileUrl: form.fileUrl || [],
             fileType: form.fileType || [],
+            questionFileUrl: form.questionFileUrl || [],
+            questionFileType: form.questionFileType || [],
+            solutionFileUrl: form.solutionFileUrl || [],
+            solutionFileType: form.solutionFileType || [],
             answers: form.answers || []
           };
           
@@ -1379,7 +1831,32 @@ function MultipleAssignmentForm({
       
       if (successCount > 0) {
         alert(`${successCount}개의 과제가 추가되었습니다.${failCount > 0 ? ` (${failCount}개 실패)` : ''}`);
-        onClose();
+        // 성공 시 폼 리셋하고 모달은 열어둠
+        setForms([{
+          id: 0,
+          assignmentName: '',
+          subject: '',
+          mainUnit: '',
+          subUnit: '',
+          questionCount: '',
+          assignmentType: 'QUIZ',
+          startDate: '',
+          dueDate: '',
+          fileUrl: [],
+          fileType: [],
+          questionFileUrl: [],
+          questionFileType: [],
+          solutionFileUrl: [],
+          solutionFileType: [],
+          answers: [],
+          previewFiles: [],
+          previewQuestionFiles: [],
+          previewSolutionFiles: [],
+          availableMainUnits: [],
+          availableSubUnits: []
+        }]);
+        setNextFormId(1);
+        setErrors({});
       } else {
         alert('과제 추가에 실패했습니다.');
       }
@@ -1418,6 +1895,11 @@ function MultipleAssignmentForm({
               errors={errors[form.id] || {}}
               subjectUnits={subjectUnits}
               subjects={subjects}
+              cloudinaryWidget={cloudinaryWidget}
+              currentUploadTypeRef={currentUploadTypeRef}
+              currentFormIdRef={currentFormIdRef}
+              setCurrentUploadType={setCurrentUploadType}
+              setForms={setMultipleForms}
             />
           </div>
         ))}
@@ -1454,7 +1936,12 @@ function SingleAssignmentForm({
   onAnswerChange, 
   errors, 
   subjectUnits, 
-  subjects
+  subjects,
+  cloudinaryWidget,
+  currentUploadTypeRef,
+  currentFormIdRef,
+  setCurrentUploadType,
+  setForms
 }) {
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -1586,6 +2073,332 @@ function SingleAssignmentForm({
           />
           {errors.dueDate && <span className="error-message">{errors.dueDate}</span>}
         </div>
+      </div>
+
+      {/* 문제지 파일 업로드 */}
+      <div className="form-group file-upload-group">
+        <label>문제지 파일 업로드 (이미지 또는 PDF)</label>
+        <div className="file-upload-section">
+          <button
+            type="button"
+            className="upload-btn"
+            onClick={() => {
+              if (cloudinaryWidget) {
+                console.log('문제지 파일 선택 버튼 클릭 (여러 폼 모드):', form.id);
+                currentUploadTypeRef.current = 'question';
+                currentFormIdRef.current = form.id;
+                setCurrentUploadType('question');
+                cloudinaryWidget.open();
+              } else {
+                alert('Cloudinary 위젯이 로드되지 않았습니다. 페이지를 새로고침해주세요.');
+              }
+            }}
+          >
+            문제지 파일 선택
+          </button>
+          {(form.previewQuestionFiles || []).length > 0 && (
+            <button
+              type="button"
+              className="remove-file-btn"
+              onClick={() => {
+                setForms(prev => prev.map(f => 
+                  f.id === form.id 
+                    ? { ...f, questionFileUrl: [], questionFileType: [], previewQuestionFiles: [] }
+                    : f
+                ));
+              }}
+            >
+              모든 문제지 파일 제거
+            </button>
+          )}
+        </div>
+        {(form.previewQuestionFiles || []).length > 0 && (
+          <div className="files-preview-container">
+            {form.previewQuestionFiles
+              .sort((a, b) => (a.order || 0) - (b.order || 0))
+              .map((file, index) => (
+                <div key={index} className="file-preview-item">
+                  <div className="file-preview-header">
+                    <div className="file-header-left">
+                      <span className="file-order-number">{index + 1}</span>
+                      <span className="file-name">{file.name}</span>
+                    </div>
+                    <div className="file-header-actions">
+                      <button
+                        type="button"
+                        className="move-file-btn move-up-btn"
+                        onClick={() => {
+                          if (index === 0) return;
+                          const sortedFiles = [...form.previewQuestionFiles].sort((a, b) => (a.order || 0) - (b.order || 0));
+                          const currentFile = sortedFiles[index];
+                          const prevFile = sortedFiles[index - 1];
+                          const newPreviewFiles = sortedFiles.map(f => {
+                            if (f.url === currentFile.url) return { ...f, order: prevFile.order };
+                            if (f.url === prevFile.url) return { ...f, order: currentFile.order };
+                            return f;
+                          }).sort((a, b) => (a.order || 0) - (b.order || 0));
+                          const currentUrlIndex = form.questionFileUrl.findIndex(url => url === currentFile.url);
+                          const prevUrlIndex = form.questionFileUrl.findIndex(url => url === prevFile.url);
+                          const newFileUrls = [...form.questionFileUrl];
+                          const newFileTypes = [...form.questionFileType];
+                          [newFileUrls[currentUrlIndex], newFileUrls[prevUrlIndex]] = [newFileUrls[prevUrlIndex], newFileUrls[currentUrlIndex]];
+                          [newFileTypes[currentUrlIndex], newFileTypes[prevUrlIndex]] = [newFileTypes[prevUrlIndex], newFileTypes[currentUrlIndex]];
+                          setForms(prev => prev.map(f => 
+                            f.id === form.id 
+                              ? { ...f, questionFileUrl: newFileUrls, questionFileType: newFileTypes, previewQuestionFiles: newPreviewFiles }
+                              : f
+                          ));
+                        }}
+                        disabled={index === 0}
+                        title="위로 이동"
+                      >
+                        ↑
+                      </button>
+                      <button
+                        type="button"
+                        className="move-file-btn move-down-btn"
+                        onClick={() => {
+                          const sortedFiles = [...form.previewQuestionFiles].sort((a, b) => (a.order || 0) - (b.order || 0));
+                          if (index === sortedFiles.length - 1) return;
+                          const currentFile = sortedFiles[index];
+                          const nextFile = sortedFiles[index + 1];
+                          const newPreviewFiles = sortedFiles.map(f => {
+                            if (f.url === currentFile.url) return { ...f, order: nextFile.order };
+                            if (f.url === nextFile.url) return { ...f, order: currentFile.order };
+                            return f;
+                          }).sort((a, b) => (a.order || 0) - (b.order || 0));
+                          const currentUrlIndex = form.questionFileUrl.findIndex(url => url === currentFile.url);
+                          const nextUrlIndex = form.questionFileUrl.findIndex(url => url === nextFile.url);
+                          const newFileUrls = [...form.questionFileUrl];
+                          const newFileTypes = [...form.questionFileType];
+                          [newFileUrls[currentUrlIndex], newFileUrls[nextUrlIndex]] = [newFileUrls[nextUrlIndex], newFileUrls[currentUrlIndex]];
+                          [newFileTypes[currentUrlIndex], newFileTypes[nextUrlIndex]] = [newFileTypes[nextUrlIndex], newFileTypes[currentUrlIndex]];
+                          setForms(prev => prev.map(f => 
+                            f.id === form.id 
+                              ? { ...f, questionFileUrl: newFileUrls, questionFileType: newFileTypes, previewQuestionFiles: newPreviewFiles }
+                              : f
+                          ));
+                        }}
+                        disabled={index === (form.previewQuestionFiles || []).length - 1}
+                        title="아래로 이동"
+                      >
+                        ↓
+                      </button>
+                      <button
+                        type="button"
+                        className="remove-single-file-btn"
+                        onClick={() => {
+                          const sortedFiles = [...form.previewQuestionFiles].sort((a, b) => (a.order || 0) - (b.order || 0));
+                          const fileToRemove = sortedFiles[index];
+                          const fileUrlIndex = form.questionFileUrl.findIndex(url => url === fileToRemove.url);
+                          const newFileUrls = form.questionFileUrl.filter((_, i) => i !== fileUrlIndex);
+                          const newFileTypes = form.questionFileType.filter((_, i) => i !== fileUrlIndex);
+                          const newPreviewFiles = form.previewQuestionFiles
+                            .filter(file => file.url !== fileToRemove.url)
+                            .map((file, idx) => ({ ...file, order: idx }))
+                            .sort((a, b) => (a.order || 0) - (b.order || 0));
+                          setForms(prev => prev.map(f => 
+                            f.id === form.id 
+                              ? { ...f, questionFileUrl: newFileUrls, questionFileType: newFileTypes, previewQuestionFiles: newPreviewFiles }
+                              : f
+                          ));
+                        }}
+                        title="파일 제거"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </div>
+                  <div className="file-preview">
+                    {file.type === 'image' ? (
+                      <img src={file.url} alt={`미리보기 ${index + 1}`} className="preview-image" />
+                    ) : file.type === 'pdf' ? (
+                      <div className="preview-pdf">
+                        <iframe
+                          src={file.url}
+                          title={`PDF 미리보기 ${index + 1}`}
+                          className="preview-iframe"
+                          type="application/pdf"
+                        />
+                        <div style={{ marginTop: '12px', display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                          <a href={file.url} target="_blank" rel="noopener noreferrer" className="pdf-link">새 창에서 PDF 열기</a>
+                          <a href={file.url} download className="pdf-link" style={{ background: '#666' }}>PDF 다운로드</a>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="preview-unknown">
+                        <p style={{ marginBottom: '12px', color: '#666' }}>파일이 업로드되었습니다.</p>
+                        <a href={file.url} target="_blank" rel="noopener noreferrer" className="pdf-link">파일 열기</a>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+          </div>
+        )}
+      </div>
+
+      {/* 해설지 파일 업로드 */}
+      <div className="form-group file-upload-group">
+        <label>해설지 파일 업로드 (이미지 또는 PDF)</label>
+        <div className="file-upload-section">
+          <button
+            type="button"
+            className="upload-btn"
+            onClick={() => {
+              if (cloudinaryWidget) {
+                console.log('해설지 파일 선택 버튼 클릭 (여러 폼 모드):', form.id);
+                currentUploadTypeRef.current = 'solution';
+                currentFormIdRef.current = form.id;
+                setCurrentUploadType('solution');
+                cloudinaryWidget.open();
+              } else {
+                alert('Cloudinary 위젯이 로드되지 않았습니다. 페이지를 새로고침해주세요.');
+              }
+            }}
+          >
+            해설지 파일 선택
+          </button>
+          {(form.previewSolutionFiles || []).length > 0 && (
+            <button
+              type="button"
+              className="remove-file-btn"
+              onClick={() => {
+                setForms(prev => prev.map(f => 
+                  f.id === form.id 
+                    ? { ...f, solutionFileUrl: [], solutionFileType: [], previewSolutionFiles: [] }
+                    : f
+                ));
+              }}
+            >
+              모든 해설지 파일 제거
+            </button>
+          )}
+        </div>
+        {(form.previewSolutionFiles || []).length > 0 && (
+          <div className="files-preview-container">
+            {form.previewSolutionFiles
+              .sort((a, b) => (a.order || 0) - (b.order || 0))
+              .map((file, index) => (
+                <div key={index} className="file-preview-item">
+                  <div className="file-preview-header">
+                    <div className="file-header-left">
+                      <span className="file-order-number">{index + 1}</span>
+                      <span className="file-name">{file.name}</span>
+                    </div>
+                    <div className="file-header-actions">
+                      <button
+                        type="button"
+                        className="move-file-btn move-up-btn"
+                        onClick={() => {
+                          if (index === 0) return;
+                          const sortedFiles = [...form.previewSolutionFiles].sort((a, b) => (a.order || 0) - (b.order || 0));
+                          const currentFile = sortedFiles[index];
+                          const prevFile = sortedFiles[index - 1];
+                          const newPreviewFiles = sortedFiles.map(f => {
+                            if (f.url === currentFile.url) return { ...f, order: prevFile.order };
+                            if (f.url === prevFile.url) return { ...f, order: currentFile.order };
+                            return f;
+                          }).sort((a, b) => (a.order || 0) - (b.order || 0));
+                          const currentUrlIndex = form.solutionFileUrl.findIndex(url => url === currentFile.url);
+                          const prevUrlIndex = form.solutionFileUrl.findIndex(url => url === prevFile.url);
+                          const newFileUrls = [...form.solutionFileUrl];
+                          const newFileTypes = [...form.solutionFileType];
+                          [newFileUrls[currentUrlIndex], newFileUrls[prevUrlIndex]] = [newFileUrls[prevUrlIndex], newFileUrls[currentUrlIndex]];
+                          [newFileTypes[currentUrlIndex], newFileTypes[prevUrlIndex]] = [newFileTypes[prevUrlIndex], newFileTypes[currentUrlIndex]];
+                          setForms(prev => prev.map(f => 
+                            f.id === form.id 
+                              ? { ...f, solutionFileUrl: newFileUrls, solutionFileType: newFileTypes, previewSolutionFiles: newPreviewFiles }
+                              : f
+                          ));
+                        }}
+                        disabled={index === 0}
+                        title="위로 이동"
+                      >
+                        ↑
+                      </button>
+                      <button
+                        type="button"
+                        className="move-file-btn move-down-btn"
+                        onClick={() => {
+                          const sortedFiles = [...form.previewSolutionFiles].sort((a, b) => (a.order || 0) - (b.order || 0));
+                          if (index === sortedFiles.length - 1) return;
+                          const currentFile = sortedFiles[index];
+                          const nextFile = sortedFiles[index + 1];
+                          const newPreviewFiles = sortedFiles.map(f => {
+                            if (f.url === currentFile.url) return { ...f, order: nextFile.order };
+                            if (f.url === nextFile.url) return { ...f, order: currentFile.order };
+                            return f;
+                          }).sort((a, b) => (a.order || 0) - (b.order || 0));
+                          const currentUrlIndex = form.solutionFileUrl.findIndex(url => url === currentFile.url);
+                          const nextUrlIndex = form.solutionFileUrl.findIndex(url => url === nextFile.url);
+                          const newFileUrls = [...form.solutionFileUrl];
+                          const newFileTypes = [...form.solutionFileType];
+                          [newFileUrls[currentUrlIndex], newFileUrls[nextUrlIndex]] = [newFileUrls[nextUrlIndex], newFileUrls[currentUrlIndex]];
+                          [newFileTypes[currentUrlIndex], newFileTypes[nextUrlIndex]] = [newFileTypes[nextUrlIndex], newFileTypes[currentUrlIndex]];
+                          setForms(prev => prev.map(f => 
+                            f.id === form.id 
+                              ? { ...f, solutionFileUrl: newFileUrls, solutionFileType: newFileTypes, previewSolutionFiles: newPreviewFiles }
+                              : f
+                          ));
+                        }}
+                        disabled={index === (form.previewSolutionFiles || []).length - 1}
+                        title="아래로 이동"
+                      >
+                        ↓
+                      </button>
+                      <button
+                        type="button"
+                        className="remove-single-file-btn"
+                        onClick={() => {
+                          const sortedFiles = [...form.previewSolutionFiles].sort((a, b) => (a.order || 0) - (b.order || 0));
+                          const fileToRemove = sortedFiles[index];
+                          const fileUrlIndex = form.solutionFileUrl.findIndex(url => url === fileToRemove.url);
+                          const newFileUrls = form.solutionFileUrl.filter((_, i) => i !== fileUrlIndex);
+                          const newFileTypes = form.solutionFileType.filter((_, i) => i !== fileUrlIndex);
+                          const newPreviewFiles = form.previewSolutionFiles
+                            .filter(file => file.url !== fileToRemove.url)
+                            .map((file, idx) => ({ ...file, order: idx }))
+                            .sort((a, b) => (a.order || 0) - (b.order || 0));
+                          setForms(prev => prev.map(f => 
+                            f.id === form.id 
+                              ? { ...f, solutionFileUrl: newFileUrls, solutionFileType: newFileTypes, previewSolutionFiles: newPreviewFiles }
+                              : f
+                          ));
+                        }}
+                        title="파일 제거"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </div>
+                  <div className="file-preview">
+                    {file.type === 'image' ? (
+                      <img src={file.url} alt={`미리보기 ${index + 1}`} className="preview-image" />
+                    ) : file.type === 'pdf' ? (
+                      <div className="preview-pdf">
+                        <iframe
+                          src={file.url}
+                          title={`PDF 미리보기 ${index + 1}`}
+                          className="preview-iframe"
+                          type="application/pdf"
+                        />
+                        <div style={{ marginTop: '12px', display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                          <a href={file.url} target="_blank" rel="noopener noreferrer" className="pdf-link">새 창에서 PDF 열기</a>
+                          <a href={file.url} download className="pdf-link" style={{ background: '#666' }}>PDF 다운로드</a>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="preview-unknown">
+                        <p style={{ marginBottom: '12px', color: '#666' }}>파일이 업로드되었습니다.</p>
+                        <a href={file.url} target="_blank" rel="noopener noreferrer" className="pdf-link">파일 열기</a>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+          </div>
+        )}
       </div>
 
       {/* 정답 입력 섹션 */}

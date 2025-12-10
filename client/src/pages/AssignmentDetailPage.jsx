@@ -43,11 +43,25 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
   const [redoHistory, setRedoHistory] = useState([]); // 되돌리기 히스토리 (되돌린 항목들 저장)
   const isSavingHistoryRef = useRef(false); // 히스토리 저장 중복 방지
   const [isLoadingAssignment, setIsLoadingAssignment] = useState(false); // assignment 로딩 상태
+  const [showSolutionModal, setShowSolutionModal] = useState(false); // 해설지 모달 표시 여부
 
   // assignment prop이 변경될 때 currentAssignment 업데이트
   useEffect(() => {
     if (assignment) {
+      console.log('[AssignmentDetailPage] assignment prop 변경:', {
+        assignmentId: assignment._id,
+        hasSolutionFileUrl: !!assignment.solutionFileUrl,
+        solutionFileUrlCount: assignment.solutionFileUrl?.length || 0,
+        solutionFileUrl: assignment.solutionFileUrl,
+        hasSolutionFileType: !!assignment.solutionFileType,
+        solutionFileType: assignment.solutionFileType,
+        fullAssignment: assignment
+      });
+      // assignment prop을 즉시 currentAssignment에 반영
       setCurrentAssignment(assignment);
+    } else {
+      // assignment가 null이면 currentAssignment도 초기화
+      setCurrentAssignment(null);
     }
   }, [assignment]);
 
@@ -105,16 +119,25 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
     { name: '보라', value: '#800080' }
   ];
 
-  // 이미지 파일만 필터링
+  // 이미지 파일만 필터링 (문제지 파일 우선 사용)
   useEffect(() => {
-    if (assignment && assignment.fileUrl && assignment.fileType) {
+    // currentAssignment 우선 사용, 없으면 assignment prop 사용
+    const assignmentToCheck = currentAssignment || assignment;
+    
+    // 문제지 파일 우선 사용, 없으면 기존 fileUrl 사용 (하위 호환성)
+    const questionFileUrls = Array.isArray(assignmentToCheck?.questionFileUrl) && assignmentToCheck.questionFileUrl.length > 0
+      ? assignmentToCheck.questionFileUrl
+      : (Array.isArray(assignmentToCheck?.fileUrl) ? assignmentToCheck.fileUrl : []);
+    const questionFileTypes = Array.isArray(assignmentToCheck?.questionFileType) && assignmentToCheck.questionFileType.length > 0
+      ? assignmentToCheck.questionFileType
+      : (Array.isArray(assignmentToCheck?.fileType) ? assignmentToCheck.fileType : []);
+    
+    if (assignmentToCheck && questionFileUrls.length > 0) {
       const imageFiles = [];
-      const fileUrls = Array.isArray(assignment.fileUrl) ? assignment.fileUrl : [];
-      const fileTypes = Array.isArray(assignment.fileType) ? assignment.fileType : [];
       
-      for (let i = 0; i < fileUrls.length; i++) {
-        if (fileTypes[i] === 'image') {
-          imageFiles.push(fileUrls[i]);
+      for (let i = 0; i < questionFileUrls.length; i++) {
+        if (questionFileTypes[i] === 'image') {
+          imageFiles.push(questionFileUrls[i]);
         }
       }
       setImages(imageFiles);
@@ -123,9 +146,9 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
       setPanOffset({ x: 0, y: 0 });
       setDrawingHistory([]); // 이미지 변경 시 히스토리 초기화
       setRedoHistory([]); // redo 히스토리도 초기화
-      // 첫 이미지의 변경사항 여부 확인 (24시간 이내인 경우만)
-      if (assignment && assignment._id && studentId) {
-        const submittedAtKey = `assignment_${assignment._id}_student_${studentId}_submittedAt`;
+        // 첫 이미지의 변경사항 여부 확인 (24시간 이내인 경우만)
+        if (assignmentToCheck && assignmentToCheck._id && studentId) {
+          const submittedAtKey = `assignment_${assignmentToCheck._id}_student_${studentId}_submittedAt`;
         const submittedAtStr = localStorage.getItem(submittedAtKey);
         
         let shouldCheckData = true;
@@ -150,8 +173,8 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
         }
         
         if (shouldCheckData && studentId) {
-          const savedData = localStorage.getItem(`assignment_${assignment._id}_student_${studentId}_image_0`) ||
-                           localStorage.getItem(`assignment_${assignment._id}_student_${studentId}_image_empty`);
+          const savedData = localStorage.getItem(`assignment_${assignmentToCheck._id}_student_${studentId}_image_0`) ||
+                           localStorage.getItem(`assignment_${assignmentToCheck._id}_student_${studentId}_image_empty`);
         setHasChanges(!!savedData);
         } else {
           setHasChanges(false);
@@ -164,7 +187,7 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
       setCurrentImageIndex(0);
       setHasChanges(false);
     }
-  }, [assignment]);
+  }, [assignment, currentAssignment]);
 
   // 만료된 캔버스 데이터 삭제 함수 (24시간 경과)
   const cleanupExpiredCanvasData = (assignmentId) => {
@@ -206,7 +229,10 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
       submissionsCount: assignmentToCheck?.submissions?.length,
       submissions: assignmentToCheck?.submissions,
       hasUser: !!user,
-      userId: user?._id
+      userId: user?._id,
+      hasSolutionFileUrl: !!assignmentToCheck?.solutionFileUrl,
+      solutionFileUrlCount: assignmentToCheck?.solutionFileUrl?.length || 0,
+      solutionFileUrl: assignmentToCheck?.solutionFileUrl
     });
     
     if (assignmentToCheck && user && assignmentToCheck.submissions) {
@@ -1782,9 +1808,91 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
           >
             정답
           </button>
-            {isSubmitted && (
-              <span className="status-badge status-submitted">제출완료</span>
-            )}
+            {isSubmitted && (() => {
+              // 해설지 파일 확인 - 모든 가능한 소스에서 확인
+              const assignmentToCheck = currentAssignment || assignment;
+              
+              // 해설지 파일 URL 배열 확인 (여러 소스에서 확인)
+              let solutionFileUrls = [];
+              let solutionFileTypes = [];
+              
+              // 1. currentAssignment에서 확인
+              if (currentAssignment) {
+                const currentUrls = Array.isArray(currentAssignment.solutionFileUrl) 
+                  ? currentAssignment.solutionFileUrl 
+                  : (currentAssignment.solutionFileUrl ? [currentAssignment.solutionFileUrl] : []);
+                const currentTypes = Array.isArray(currentAssignment.solutionFileType) 
+                  ? currentAssignment.solutionFileType 
+                  : (currentAssignment.solutionFileType ? [currentAssignment.solutionFileType] : []);
+                
+                if (currentUrls.length > 0) {
+                  solutionFileUrls = currentUrls;
+                  solutionFileTypes = currentTypes;
+                }
+              }
+              
+              // 2. assignment prop에서 확인 (currentAssignment에 없으면)
+              if (solutionFileUrls.length === 0 && assignment) {
+                const assignmentUrls = Array.isArray(assignment.solutionFileUrl) 
+                  ? assignment.solutionFileUrl 
+                  : (assignment.solutionFileUrl ? [assignment.solutionFileUrl] : []);
+                const assignmentTypes = Array.isArray(assignment.solutionFileType) 
+                  ? assignment.solutionFileType 
+                  : (assignment.solutionFileType ? [assignment.solutionFileType] : []);
+                
+                if (assignmentUrls.length > 0) {
+                  solutionFileUrls = assignmentUrls;
+                  solutionFileTypes = assignmentTypes;
+                }
+              }
+              
+              const hasSolutionFiles = solutionFileUrls.length > 0;
+              
+              console.log('[AssignmentDetailPage] 해설지 파일 확인 (렌더링 시점):', {
+                isSubmitted: isSubmitted,
+                hasCurrentAssignment: !!currentAssignment,
+                hasAssignment: !!assignment,
+                currentAssignmentId: currentAssignment?._id,
+                assignmentId: assignment?._id,
+                currentAssignmentSolutionFileUrl: currentAssignment?.solutionFileUrl,
+                assignmentSolutionFileUrl: assignment?.solutionFileUrl,
+                solutionFileUrls: solutionFileUrls,
+                solutionFileUrlsLength: solutionFileUrls.length,
+                solutionFileTypes: solutionFileTypes,
+                hasSolutionFiles: hasSolutionFiles,
+                assignmentToCheckId: assignmentToCheck?._id,
+                assignmentToCheckSolutionFileUrl: assignmentToCheck?.solutionFileUrl
+              });
+              
+              // 해설지 파일이 있으면 해설지 버튼 표시, 없으면 제출완료 뱃지 표시
+              if (hasSolutionFiles) {
+                console.log('[AssignmentDetailPage] ✅ 해설지 버튼 표시함 - 해설지 파일 개수:', solutionFileUrls.length);
+                return (
+                  <button
+                    onClick={() => {
+                      // 해설지 모달 열기
+                      setShowSolutionModal(true);
+                    }}
+                    className="btn-solution"
+                    style={{
+                      padding: '8px 16px',
+                      backgroundColor: '#28a745',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      fontWeight: '500'
+                    }}
+                  >
+                    해설지
+                  </button>
+                );
+              } else {
+                console.log('[AssignmentDetailPage] ❌ 해설지 파일이 없어서 제출완료 뱃지 표시');
+                return <span className="status-badge status-submitted">제출완료</span>;
+              }
+            })()}
           </div>
         </div>
       </header>
@@ -2150,6 +2258,116 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
           className="answer-panel-overlay"
           onClick={() => setShowAnswerPanel(false)}
         />
+      )}
+
+      {/* 해설지 모달 */}
+      {showSolutionModal && (
+        <div 
+          className="solution-modal-overlay"
+          onClick={() => setShowSolutionModal(false)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            zIndex: 10000,
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center'
+          }}
+        >
+          <div 
+            className="solution-modal-content"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: 'white',
+              borderRadius: '8px',
+              padding: '20px',
+              maxWidth: '90vw',
+              maxHeight: '90vh',
+              overflow: 'auto',
+              position: 'relative',
+              display: 'flex',
+              flexDirection: 'column'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '600' }}>해설지</h2>
+              <button
+                onClick={() => setShowSolutionModal(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '24px',
+                  cursor: 'pointer',
+                  padding: '0',
+                  width: '30px',
+                  height: '30px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                ×
+              </button>
+            </div>
+            <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              {(() => {
+                const solutionFileUrls = Array.isArray(currentAssignment?.solutionFileUrl) 
+                  ? currentAssignment.solutionFileUrl 
+                  : (Array.isArray(assignment?.solutionFileUrl) ? assignment.solutionFileUrl : []);
+                const solutionFileTypes = Array.isArray(currentAssignment?.solutionFileType) 
+                  ? currentAssignment.solutionFileType 
+                  : (Array.isArray(assignment?.solutionFileType) ? assignment.solutionFileType : []);
+                
+                const solutionImages = [];
+                for (let i = 0; i < solutionFileUrls.length; i++) {
+                  if (solutionFileTypes[i] === 'image') {
+                    solutionImages.push(solutionFileUrls[i]);
+                  }
+                }
+                
+                if (solutionImages.length === 0) {
+                  return (
+                    <div style={{ padding: '40px', textAlign: 'center', color: '#666' }}>
+                      해설지 파일이 없습니다.
+                    </div>
+                  );
+                }
+                
+                return (
+                  <>
+                    {solutionImages.map((imgUrl, index) => (
+                      <img
+                        key={index}
+                        src={imgUrl}
+                        alt={`해설지 ${index + 1}`}
+                        crossOrigin="anonymous"
+                        onError={(e) => {
+                          console.error('해설지 이미지 로드 실패:', imgUrl);
+                          e.target.style.display = 'none';
+                        }}
+                        style={{
+                          maxWidth: '100%',
+                          height: 'auto',
+                          marginBottom: index < solutionImages.length - 1 ? '16px' : '0',
+                          pointerEvents: 'none',
+                          userSelect: 'none',
+                          WebkitUserSelect: 'none',
+                          WebkitTouchCallout: 'none'
+                        }}
+                        draggable={false}
+                        onContextMenu={(e) => e.preventDefault()}
+                      />
+                    ))}
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

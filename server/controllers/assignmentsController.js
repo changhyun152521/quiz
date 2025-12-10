@@ -69,6 +69,11 @@ const getAssignmentById = async (req, res) => {
       answersCount: assignmentData.answers?.length,
       hasSubmissions: !!assignmentData.submissions,
       submissionsCount: assignmentData.submissions?.length,
+      hasSolutionFileUrl: !!assignmentData.solutionFileUrl,
+      solutionFileUrlCount: assignmentData.solutionFileUrl?.length || 0,
+      solutionFileUrl: assignmentData.solutionFileUrl,
+      hasSolutionFileType: !!assignmentData.solutionFileType,
+      solutionFileType: assignmentData.solutionFileType,
       submissions: assignmentData.submissions?.map(sub => ({
         studentId: sub.studentId?._id || sub.studentId,
         hasStudentAnswers: !!sub.studentAnswers,
@@ -141,6 +146,11 @@ const getAssignmentById = async (req, res) => {
       answers: assignmentData.answers, // 정답 내용도 로그에 포함
       hasSubmissions: !!assignmentData.submissions,
       submissionsCount: assignmentData.submissions?.length,
+      hasSolutionFileUrl: !!assignmentData.solutionFileUrl,
+      solutionFileUrlCount: assignmentData.solutionFileUrl?.length || 0,
+      solutionFileUrl: assignmentData.solutionFileUrl,
+      hasSolutionFileType: !!assignmentData.solutionFileType,
+      solutionFileType: assignmentData.solutionFileType,
       isStudent: isStudent,
       hasUser: !!user,
       userRole: user?.role
@@ -199,6 +209,10 @@ const createAssignment = async (req, res) => {
       dueDate,
       fileUrl,
       fileType,
+      questionFileUrl,
+      questionFileType,
+      solutionFileUrl,
+      solutionFileType,
       answers
     } = req.body;
 
@@ -247,7 +261,8 @@ const createAssignment = async (req, res) => {
     }
 
     // 새 과제 생성
-    // fileUrl과 fileType은 배열로 처리 (여러 파일 지원)
+    // fileUrl과 fileType은 배열로 처리 (여러 파일 지원, 하위 호환성 유지)
+    // questionFileUrl, questionFileType, solutionFileUrl, solutionFileType은 새로운 필드
     // 클리닉 타입일 때는 mainUnit과 subUnit을 빈 문자열로 설정
     const newAssignment = new Assignment({
       assignmentName,
@@ -258,8 +273,12 @@ const createAssignment = async (req, res) => {
       assignmentType,
       startDate: start,
       dueDate: due,
-      fileUrl: Array.isArray(fileUrl) ? fileUrl : (fileUrl ? [fileUrl] : []),
-      fileType: Array.isArray(fileType) ? fileType : (fileType ? [fileType] : []),
+      fileUrl: Array.isArray(fileUrl) ? fileUrl : (fileUrl ? [fileUrl] : []), // 하위 호환성 유지
+      fileType: Array.isArray(fileType) ? fileType : (fileType ? [fileType] : []), // 하위 호환성 유지
+      questionFileUrl: Array.isArray(questionFileUrl) ? questionFileUrl : (questionFileUrl ? [questionFileUrl] : []),
+      questionFileType: Array.isArray(questionFileType) ? questionFileType : (questionFileType ? [questionFileType] : []),
+      solutionFileUrl: Array.isArray(solutionFileUrl) ? solutionFileUrl : (solutionFileUrl ? [solutionFileUrl] : []),
+      solutionFileType: Array.isArray(solutionFileType) ? solutionFileType : (solutionFileType ? [solutionFileType] : []),
       answers: Array.isArray(answers) ? answers : (answers ? [answers] : [])
     });
 
@@ -300,6 +319,10 @@ const updateAssignment = async (req, res) => {
       dueDate,
       fileUrl,
       fileType,
+      questionFileUrl,
+      questionFileType,
+      solutionFileUrl,
+      solutionFileType,
       answers
     } = req.body;
 
@@ -338,8 +361,24 @@ const updateAssignment = async (req, res) => {
       }
       updateData.assignmentType = assignmentType;
     }
-    if (fileUrl !== undefined) updateData.fileUrl = fileUrl;
-    if (fileType !== undefined) updateData.fileType = fileType;
+    if (fileUrl !== undefined) updateData.fileUrl = fileUrl; // 하위 호환성 유지
+    if (fileType !== undefined) updateData.fileType = fileType; // 하위 호환성 유지
+    if (questionFileUrl !== undefined) {
+      updateData.questionFileUrl = Array.isArray(questionFileUrl) ? questionFileUrl : (questionFileUrl ? [questionFileUrl] : []);
+      console.log('[updateAssignment] questionFileUrl 업데이트:', updateData.questionFileUrl);
+    }
+    if (questionFileType !== undefined) {
+      updateData.questionFileType = Array.isArray(questionFileType) ? questionFileType : (questionFileType ? [questionFileType] : []);
+      console.log('[updateAssignment] questionFileType 업데이트:', updateData.questionFileType);
+    }
+    if (solutionFileUrl !== undefined) {
+      updateData.solutionFileUrl = Array.isArray(solutionFileUrl) ? solutionFileUrl : (solutionFileUrl ? [solutionFileUrl] : []);
+      console.log('[updateAssignment] solutionFileUrl 업데이트:', updateData.solutionFileUrl);
+    }
+    if (solutionFileType !== undefined) {
+      updateData.solutionFileType = Array.isArray(solutionFileType) ? solutionFileType : (solutionFileType ? [solutionFileType] : []);
+      console.log('[updateAssignment] solutionFileType 업데이트:', updateData.solutionFileType);
+    }
     // answers 필드 처리
     if (answers !== undefined) {
       if (Array.isArray(answers)) {

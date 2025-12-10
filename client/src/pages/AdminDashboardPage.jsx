@@ -390,6 +390,8 @@ function AdminDashboardPage({ user, onLogout, onGoToMainPage }) {
       if (response.ok) {
         alert(assignmentId ? '과제 정보가 수정되었습니다.' : '과제가 추가되었습니다.');
         fetchAssignments();
+        fetchAllAssignments(); // allAssignments도 새로고침
+        fetchCourses(); // 강좌 데이터도 새로고침 (학생 대시보드에 반영되도록)
       } else {
         alert(data.message || '저장에 실패했습니다.');
         throw new Error(data.message);

@@ -91,26 +91,39 @@ function TestResultModal({ showModal, onClose, course, allAssignments = [] }) {
     
     const solutionData = [];
     
-    // 원본 과제 이미지 가져오기
+    // 원본 과제 이미지 가져오기 (questionFileUrl 우선, 없으면 fileUrl 사용 - 하위 호환성)
     const originalImages = [];
-    if (assignment.fileUrl && assignment.fileType) {
-      const fileUrls = Array.isArray(assignment.fileUrl) ? assignment.fileUrl : [];
-      const fileTypes = Array.isArray(assignment.fileType) ? assignment.fileType : [];
-      
-      console.log('[TestResultModal] 원본 이미지 확인:', {
-        fileUrls: fileUrls,
-        fileTypes: fileTypes,
-        fileUrlsLength: fileUrls.length,
-        fileTypesLength: fileTypes.length
-      });
-      
-      for (let i = 0; i < fileUrls.length; i++) {
-        if (fileTypes[i] === 'image' && fileUrls[i]) {
-          // URL이 유효한지 확인
-          const url = fileUrls[i];
-          if (url && typeof url === 'string' && url.trim() !== '') {
-            originalImages.push({ index: i, url: url });
-          }
+    
+    // questionFileUrl 우선 확인 (새로운 필드)
+    let fileUrls = [];
+    let fileTypes = [];
+    
+    if (assignment.questionFileUrl && assignment.questionFileType) {
+      fileUrls = Array.isArray(assignment.questionFileUrl) ? assignment.questionFileUrl : [];
+      fileTypes = Array.isArray(assignment.questionFileType) ? assignment.questionFileType : [];
+    } else if (assignment.fileUrl && assignment.fileType) {
+      // 하위 호환성: 기존 fileUrl 사용
+      fileUrls = Array.isArray(assignment.fileUrl) ? assignment.fileUrl : [];
+      fileTypes = Array.isArray(assignment.fileType) ? assignment.fileType : [];
+    }
+    
+    console.log('[TestResultModal] 원본 이미지 확인:', {
+      hasQuestionFileUrl: !!assignment.questionFileUrl,
+      questionFileUrls: assignment.questionFileUrl,
+      questionFileTypes: assignment.questionFileType,
+      hasFileUrl: !!assignment.fileUrl,
+      fileUrls: fileUrls,
+      fileTypes: fileTypes,
+      fileUrlsLength: fileUrls.length,
+      fileTypesLength: fileTypes.length
+    });
+    
+    for (let i = 0; i < fileUrls.length; i++) {
+      if (fileTypes[i] === 'image' && fileUrls[i]) {
+        // URL이 유효한지 확인
+        const url = fileUrls[i];
+        if (url && typeof url === 'string' && url.trim() !== '') {
+          originalImages.push({ index: i, url: url });
         }
       }
     }
@@ -118,8 +131,10 @@ function TestResultModal({ showModal, onClose, course, allAssignments = [] }) {
     console.log('[TestResultModal] 원본 이미지 배열:', {
       originalImagesCount: originalImages.length,
       originalImages: originalImages,
-      assignmentFileUrl: assignment.fileUrl,
-      assignmentFileType: assignment.fileType
+      questionFileUrl: assignment.questionFileUrl,
+      questionFileType: assignment.questionFileType,
+      fileUrl: assignment.fileUrl,
+      fileType: assignment.fileType
     });
     
     // assignment의 submissions에서 해당 학생의 solutionImages 가져오기
@@ -596,7 +611,7 @@ function TestResultModal({ showModal, onClose, course, allAssignments = [] }) {
     }}>
       <div className="test-result-modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="test-result-modal-header">
-          <h2 className="test-result-modal-title">테스트 조회</h2>
+          <h2 className="test-result-modal-title">과제 조회</h2>
           <button className="test-result-modal-close" onClick={onClose}>×</button>
         </div>
 
