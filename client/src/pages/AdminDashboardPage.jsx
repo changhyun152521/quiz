@@ -73,8 +73,8 @@ function AdminDashboardPage({ user, onLogout, onGoToMainPage }) {
 
       const data = await response.json();
       if (data.success) {
-        // role이 'student'인 사용자만 필터링
-        const studentUsers = (data.data || []).filter(user => user.role === 'student');
+        // userType이 '학생'인 사용자만 필터링
+        const studentUsers = (data.data || []).filter(user => user.userType === '학생');
         setStudents(studentUsers);
       } else {
         alert('학생 목록을 불러오는데 실패했습니다.');
@@ -109,8 +109,8 @@ function AdminDashboardPage({ user, onLogout, onGoToMainPage }) {
 
       const data = await response.json();
       if (data.success) {
-        // role이 'teacher'인 사용자만 필터링
-        const teacherUsers = (data.data || []).filter(user => user.role === 'teacher');
+        // userType이 '강사'인 사용자만 필터링
+        const teacherUsers = (data.data || []).filter(user => user.userType === '강사');
         setTeachers(teacherUsers);
       } else {
         alert('강사 목록을 불러오는데 실패했습니다.');
@@ -446,19 +446,19 @@ function AdminDashboardPage({ user, onLogout, onGoToMainPage }) {
       const token = localStorage.getItem('token');
       let response;
 
-      // 강사 role 추가, 필수 필드만 포함
+      // mathchang API에 맞는 강사 데이터 형식
       const teacherData = {
         userId: formData.userId,
         name: formData.name,
-        role: 'teacher',
-        // 강사는 나머지 필드가 필요 없으므로 기본값 설정
-        studentPhone: '00000000000',
-        parentPhone: '00000000000',
-        email: `${formData.userId}@teacher.com`, // 임시 이메일
-        schoolName: '강사',
-        grade: '초등', // 기본값
-        privacyConsent: true,
-        termsConsent: true
+        userType: '강사',
+        // mathchang API 필수 필드
+        phone: formData.phone || '010-0000-0000',
+        studentContact: formData.phone || '010-0000-0000',
+        parentContact: formData.phone || '010-0000-0000',
+        email: formData.email || `${formData.userId}@mathchang.com`,
+        schoolName: formData.schoolName || '이창현수학',
+        privacyAgreement: true,
+        termsAgreement: true
       };
 
       // 비밀번호는 있을 때만 포함
@@ -1216,7 +1216,7 @@ function AdminDashboardPage({ user, onLogout, onGoToMainPage }) {
         onSave={handleSaveCourse}
         mode={courseModalMode}
         teachers={teacherList}
-        students={students.filter(s => s.role === 'student')}
+        students={students.filter(s => s.userType === '학생')}
         assignments={allAssignments}
       />
 
@@ -1284,41 +1284,6 @@ function AdminDashboardPage({ user, onLogout, onGoToMainPage }) {
         showModal={showMyInfoModal}
         onClose={() => setShowMyInfoModal(false)}
         user={user}
-        onUpdateUser={async (formData) => {
-          const response = await put(`/api/users/${user._id}`, formData);
-
-          const data = await response.json();
-          if (!response.ok || !data.success) {
-            throw new Error(data.message || '정보 수정에 실패했습니다.');
-          }
-
-          // 사용자 정보 업데이트
-          const updatedUser = { ...user, ...formData };
-          localStorage.setItem('user', JSON.stringify(updatedUser));
-          window.location.reload(); // 페이지 새로고침하여 업데이트된 정보 반영
-        }}
-        onUpdatePassword={async (passwordData) => {
-          const response = await patch(`/api/users/${user._id}/password`, passwordData);
-
-          const data = await response.json();
-          if (!response.ok || !data.success) {
-            throw new Error(data.message || '비밀번호 변경에 실패했습니다.');
-          }
-        }}
-        onDeleteUser={async () => {
-          const response = await del(`/api/users/${user._id}`);
-
-          const data = await response.json();
-          if (!response.ok || !data.success) {
-            throw new Error(data.message || '회원탈퇴에 실패했습니다.');
-          }
-
-          // 로그아웃 처리
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
-          localStorage.removeItem('rememberMe');
-          onLogout();
-        }}
       />
     </div>
   );

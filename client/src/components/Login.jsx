@@ -2,7 +2,10 @@ import { useState, useEffect } from 'react';
 import { get, post } from '../utils/api';
 import './Login.css';
 
-function Login({ showModal, onClose, onShowSignUp, onLoginSuccess }) {
+// mathchang-quiz 로그인 컴포넌트
+// 백엔드가 mathchang API를 프록시하여 인증 처리
+
+function Login({ showModal, onClose, onLoginSuccess }) {
   const [formData, setFormData] = useState({
     userId: '',
     password: '',
@@ -102,51 +105,40 @@ function Login({ showModal, onClose, onShowSignUp, onLoginSuccess }) {
     setIsSubmitting(true);
 
     try {
-      console.log('로그인 시도:', { userId: formData.userId, passwordLength: formData.password.length });
-      
+      // mathchang-quiz 백엔드로 로그인 요청 (백엔드가 mathchang API를 프록시)
       const response = await post('/api/auth/login', {
           userId: formData.userId,
           password: formData.password,
           rememberMe: formData.rememberMe
       });
 
-      console.log('서버 응답 상태:', response.status, response.statusText);
-      
       const data = await response.json();
-      console.log('서버 응답 데이터:', data);
 
       if (!response.ok) {
-        // 로그인 실패 메시지
         const errorMessage = data.message || '아이디 또는 비밀번호가 일치하지 않습니다.';
-        console.error('로그인 실패:', errorMessage);
         alert(errorMessage);
         setIsSubmitting(false);
         return;
       }
 
-      // 로그인 성공
-      // 토큰을 localStorage에 저장
+      // 로그인 성공 - 토큰과 사용자 정보 저장
       localStorage.setItem('token', data.data.token);
       localStorage.setItem('user', JSON.stringify(data.data.user));
-      
-      // 자동로그인 선택 시 rememberMe 플래그 저장
+
       if (formData.rememberMe) {
         localStorage.setItem('rememberMe', 'true');
       } else {
         localStorage.removeItem('rememberMe');
       }
-      
-      // 로그인 성공 메시지
+
       alert('로그인에 성공했습니다!');
-      
+
       onClose();
-      // 로그인 성공 콜백 호출
-      // 학습하기 버튼을 통해 로그인한 경우 강좌 선택 모달 표시
       if (onLoginSuccess) {
         const user = data.data.user;
-        // 학생인 경우 로그인 성공 시 바로 강좌 선택 모달 표시
-        const shouldShowCourseModal = (user.role === 'student' || !user.role);
-        onLoginSuccess(user, shouldShowCourseModal);
+        // 학생인 경우 (mathchang: userType이 '학생')
+        const isStudent = user.userType === '학생' || (!user.userType && !user.isAdmin);
+        onLoginSuccess(user, isStudent);
       }
     } catch (error) {
       console.error('로그인 오류:', error);
@@ -166,7 +158,6 @@ function Login({ showModal, onClose, onShowSignUp, onLoginSuccess }) {
 
     try {
       const response = await post('/api/auth/find-userid', findUserIdData);
-
       const data = await response.json();
 
       if (response.ok) {
@@ -187,50 +178,35 @@ function Login({ showModal, onClose, onShowSignUp, onLoginSuccess }) {
 
   return (
     <div className="login-modal-overlay" onClick={(e) => {
-      // 작업 중이 아닐 때만 overlay 클릭으로 닫기
       if (!isSubmitting && e.target === e.currentTarget) {
         onClose();
       }
     }}>
       <div className="login-modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="login-wrapper">
-          <button 
+          <button
             className="login-close-btn"
             onClick={onClose}
             type="button"
           >
             ×
           </button>
-          
+
           {!showFindUserId ? (
             <>
               <h1 className="login-title">로그인</h1>
-              
-              <div className="login-notice" style={{ marginBottom: '24px', marginTop: '0', marginLeft: '0', marginRight: '0' }}>
-                <p>※ 이창현수학 홈페이지 ID와는 연동되지 않습니다</p>
+
+              <div className="login-notice" style={{ marginBottom: '24px', marginTop: '0' }}>
+                <p>※ 이창현수학 홈페이지 계정으로 로그인합니다</p>
               </div>
 
-              <form onSubmit={handleSubmit} className="login-form" style={{ 
-                display: 'flex', 
-                flexDirection: 'column', 
-                gap: '12px',
-                rowGap: '12px',
-                columnGap: '0',
-                margin: '0',
-                padding: '0'
+              <form onSubmit={handleSubmit} className="login-form" style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px'
               }}>
                 {/* 아이디 */}
-                <div className="form-group" style={{ 
-                  margin: '0', 
-                  marginTop: '0', 
-                  marginBottom: '0',
-                  marginLeft: '0',
-                  marginRight: '0',
-                  padding: '0',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '6px'
-                }}>
+                <div className="form-group" style={{ margin: '0', padding: '0' }}>
                   <div className="input-wrapper">
                     <span className="input-icon">👤</span>
                     <input
@@ -247,17 +223,7 @@ function Login({ showModal, onClose, onShowSignUp, onLoginSuccess }) {
                 </div>
 
                 {/* 비밀번호 */}
-                <div className="form-group" style={{ 
-                  margin: '0', 
-                  marginTop: '0', 
-                  marginBottom: '0',
-                  marginLeft: '0',
-                  marginRight: '0',
-                  padding: '0',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '6px'
-                }}>
+                <div className="form-group" style={{ margin: '0', padding: '0' }}>
                   <div className="input-wrapper">
                     <span className="input-icon">🔒</span>
                     <input
@@ -281,17 +247,7 @@ function Login({ showModal, onClose, onShowSignUp, onLoginSuccess }) {
                 </div>
 
                 {/* 자동로그인 및 아이디 찾기 */}
-                <div className="login-options" style={{ 
-                  margin: '0', 
-                  marginTop: '0', 
-                  marginBottom: '0',
-                  marginLeft: '0',
-                  marginRight: '0',
-                  padding: '0',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center'
-                }}>
+                <div className="login-options" style={{ margin: '0', padding: '0' }}>
                   <label className="remember-me-label">
                     <input
                       type="checkbox"
@@ -318,20 +274,17 @@ function Login({ showModal, onClose, onShowSignUp, onLoginSuccess }) {
                   {isSubmitting ? '처리 중...' : '로그인'}
                 </button>
 
-                {/* 회원가입 링크 */}
+                {/* 회원가입 안내 */}
                 <div className="signup-link-section">
                   <p className="signup-link-text">계정이 없으신가요?</p>
-                  <button
-                    type="button"
+                  <a
+                    href="https://www.mathchang.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="signup-link-btn"
-                    onClick={() => {
-                      if (onShowSignUp) {
-                        onShowSignUp();
-                      }
-                    }}
                   >
-                    회원가입
-                  </button>
+                    이창현수학에서 회원가입
+                  </a>
                 </div>
               </form>
             </>
@@ -408,4 +361,3 @@ function Login({ showModal, onClose, onShowSignUp, onLoginSuccess }) {
 }
 
 export default Login;
-

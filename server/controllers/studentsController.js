@@ -1,6 +1,8 @@
+// mathchang-quiz는 mathchang의 인증을 사용합니다.
+// 학생 ID는 mathchang의 _id (문자열)를 사용합니다.
+
 const Assignment = require('../models/Assignment');
 const Course = require('../models/Course');
-const User = require('../models/User');
 
 // 과목별 대단원 및 소단원 순서 정의
 const unitOrder = {

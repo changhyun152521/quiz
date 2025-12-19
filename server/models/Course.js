@@ -1,3 +1,7 @@
+// mathchang-quiz는 mathchang의 인증을 사용합니다.
+// 사용자 정보는 mathchang의 사용자 ID(문자열)로만 참조합니다.
+// 사용자 상세 정보가 필요한 경우 mathchang API를 호출합니다.
+
 const mongoose = require('mongoose');
 
 const courseSchema = new mongoose.Schema({
@@ -9,27 +13,25 @@ const courseSchema = new mongoose.Schema({
     maxlength: [100, '강좌 이름은 최대 100자까지 가능합니다']
   },
 
-  // 강사 (User 모델 참조)
+  // 강사 ID (mathchang 사용자 _id, ref 없이 ObjectId만 저장)
   teacher: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
     required: [true, '강사는 필수입니다']
   },
 
-  // 강사 이름 (검색 및 표시용)
+  // 강사 이름 (표시용 - 비정규화)
   teacherName: {
     type: String,
     required: [true, '강사 이름은 필수입니다'],
     trim: true
   },
 
-  // 등록된 학생들 (User 모델 참조 배열)
+  // 등록된 학생들 (mathchang 사용자 _id 배열, ref 없이 ObjectId만 저장)
   students: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
+    type: mongoose.Schema.Types.ObjectId
   }],
 
-  // 학생 이름 배열 (검색 및 표시용)
+  // 학생 이름 배열 (표시용 - 비정규화)
   studentNames: [{
     type: String
   }],

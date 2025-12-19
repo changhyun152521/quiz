@@ -1,5 +1,6 @@
 // API 기본 URL 설정
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+// 개발 모드에서는 빈 문자열로 설정하여 Vite 프록시 사용
+const API_URL = import.meta.env.VITE_API_URL || '';
 
 /**
  * API 요청 헬퍼 함수

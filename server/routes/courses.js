@@ -9,13 +9,17 @@ const {
   addStudentToCourse,
   removeStudentFromCourse,
   getTeachers,
+  getStudents,
   getCoursesByStudent,
   addAssignmentToCourse,
   removeAssignmentFromCourse
 } = require('../controllers/coursesController');
 
-// GET /api/courses/teachers - 강사 목록 조회
+// GET /api/courses/teachers - 강사 목록 조회 (mathchang API 프록시)
 router.get('/teachers', getTeachers);
+
+// GET /api/courses/students - 학생 목록 조회 (mathchang API 프록시)
+router.get('/students', getStudents);
 
 // GET /api/courses/student/:studentId - 특정 학생이 등록된 강좌 목록 조회
 router.get('/student/:studentId', getCoursesByStudent);

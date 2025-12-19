@@ -1,25 +1,19 @@
-const User = require('../models/User');
+// mathchang-quiz는 mathchang의 인증을 사용합니다.
+// 사용자 정보는 프론트엔드에서 전달받습니다.
+
 const Course = require('../models/Course');
 const { sendKakaoMessage } = require('../utils/kakaoMessage');
 
 // POST /api/messages/send-report - 학습 보고서 메시지 발송
+// 프론트엔드에서 student 정보(name, userId 등)를 함께 전달받음
 const sendReportMessage = async (req, res) => {
   try {
-    const { studentId, courseId, startDate, endDate, reportTitle, comment, reportImage, parentPhone } = req.body;
+    const { studentId, studentName, studentUserId, courseId, startDate, endDate, reportTitle, comment, reportImage, parentPhone } = req.body;
 
-    if (!studentId || !courseId || !startDate || !endDate || !reportTitle) {
+    if (!studentId || !studentName || !courseId || !startDate || !endDate || !reportTitle) {
       return res.status(400).json({
         success: false,
-        message: '필수 정보가 누락되었습니다'
-      });
-    }
-
-    // 학생 정보 가져오기
-    const student = await User.findById(studentId);
-    if (!student) {
-      return res.status(404).json({
-        success: false,
-        message: '학생을 찾을 수 없습니다'
+        message: '필수 정보가 누락되었습니다 (studentId, studentName, courseId, startDate, endDate, reportTitle)'
       });
     }
 
@@ -39,7 +33,7 @@ const sendReportMessage = async (req, res) => {
     };
 
     let message = `[${reportTitle}]\n\n`;
-    message += `학생: ${student.name} (${student.userId})\n`;
+    message += `학생: ${studentName} (${studentUserId || studentId})\n`;
     message += `강좌: ${course.courseName}\n`;
     message += `학습 기간: ${formatDate(startDate)} ~ ${formatDate(endDate)}\n\n`;
 
@@ -47,13 +41,11 @@ const sendReportMessage = async (req, res) => {
       message += `[코멘트]\n${comment}\n\n`;
     }
 
-    // TODO: 카카오톡 메시지 발송 로직 구현
-    // 카카오톡 비즈니스 API 또는 알림톡 API 사용
-    // 보고서 이미지(reportImage)와 메시지를 함께 발송
-    const targetPhone = parentPhone || student.parentPhone;
-    
+    // 카카오톡 메시지 발송
+    const targetPhone = parentPhone;
+
     console.log('=== 학습 보고서 카카오톡 메시지 발송 ===');
-    console.log(`학생: ${student.name} (${student.userId})`);
+    console.log(`학생: ${studentName} (${studentUserId || studentId})`);
     console.log(`강좌: ${course.courseName}`);
     console.log(`기간: ${formatDate(startDate)} ~ ${formatDate(endDate)}`);
     console.log(`보고서 제목: ${reportTitle}`);
@@ -65,27 +57,27 @@ const sendReportMessage = async (req, res) => {
     console.log('==========================================');
 
     // 카카오톡 메시지 발송
-    try {
-      await sendKakaoMessage({
-        phone: targetPhone,
-        message: message,
-        image: reportImage,
-        reportTitle: reportTitle
-      });
-    } catch (kakaoError) {
-      console.error('카카오톡 메시지 발송 오류:', kakaoError);
-      // 카카오톡 발송 실패해도 성공으로 처리 (나중에 재시도 가능)
+    if (targetPhone) {
+      try {
+        await sendKakaoMessage({
+          phone: targetPhone,
+          message: message,
+          image: reportImage,
+          reportTitle: reportTitle
+        });
+      } catch (kakaoError) {
+        console.error('카카오톡 메시지 발송 오류:', kakaoError);
+        // 카카오톡 발송 실패해도 성공으로 처리 (나중에 재시도 가능)
+      }
     }
 
     res.json({
       success: true,
       message: '메시지가 발송되었습니다',
       data: {
-        studentId: student._id,
-        studentName: student.name,
-        email: student.email,
-        studentPhone: student.studentPhone,
-        parentPhone: student.parentPhone
+        studentId,
+        studentName,
+        parentPhone
       }
     });
   } catch (error) {
@@ -99,6 +91,7 @@ const sendReportMessage = async (req, res) => {
 };
 
 // POST /api/messages/send-bulk-reports - 일괄 학습 보고서 메시지 발송
+// 프론트엔드에서 각 학생의 정보(studentId, studentName, parentPhone 등)를 함께 전달받음
 const sendBulkReportMessages = async (req, res) => {
   try {
     const { courseId, startDate, endDate, reportTitle, comment, studentReports } = req.body;
@@ -128,20 +121,20 @@ const sendBulkReportMessages = async (req, res) => {
     const errors = [];
 
     // 각 학생별로 메시지 발송
-    for (const { studentId, student: studentData, reportData, parentPhone: studentParentPhone } of studentReports) {
+    // studentReports 배열에는 { studentId, studentName, studentUserId, parentPhone, ... } 형태의 객체가 포함됨
+    for (const { studentId, studentName, studentUserId, parentPhone } of studentReports) {
       try {
-        const student = studentData || await User.findById(studentId);
-        if (!student) {
+        if (!studentId || !studentName) {
           errors.push({
             studentId,
-            error: '학생을 찾을 수 없습니다'
+            error: '학생 정보가 누락되었습니다'
           });
           continue;
         }
 
         // 보고서 메시지 생성
         let message = `[${reportTitle}]\n\n`;
-        message += `학생: ${student.name} (${student.userId})\n`;
+        message += `학생: ${studentName} (${studentUserId || studentId})\n`;
         message += `강좌: ${course.courseName}\n`;
         message += `학습 기간: ${formatDate(startDate)} ~ ${formatDate(endDate)}\n\n`;
 
@@ -150,29 +143,30 @@ const sendBulkReportMessages = async (req, res) => {
         }
 
         // 카카오톡 메시지 발송
-        const targetPhone = studentParentPhone || student.parentPhone;
-        try {
-          await sendKakaoMessage({
-            phone: targetPhone,
-            message: message,
-            image: null, // 일괄 발송 시 이미지는 서버에서 생성 필요
-            reportTitle: reportTitle
-          });
-        } catch (kakaoError) {
-          console.error(`학생 ${student.name} 카카오톡 메시지 발송 오류:`, kakaoError);
-          // 카카오톡 발송 실패해도 성공으로 처리 (나중에 재시도 가능)
+        if (parentPhone) {
+          try {
+            await sendKakaoMessage({
+              phone: parentPhone,
+              message: message,
+              image: null, // 일괄 발송 시 이미지는 서버에서 생성 필요
+              reportTitle: reportTitle
+            });
+          } catch (kakaoError) {
+            console.error(`학생 ${studentName} 카카오톡 메시지 발송 오류:`, kakaoError);
+            // 카카오톡 발송 실패해도 성공으로 처리 (나중에 재시도 가능)
+          }
         }
-        
-        console.log(`[일괄 발송] ${student.name} (${student.userId})에게 카카오톡 메시지 발송`);
-        console.log(`부모님 연락처: ${targetPhone}`);
+
+        console.log(`[일괄 발송] ${studentName} (${studentUserId || studentId})에게 카카오톡 메시지 발송`);
+        console.log(`부모님 연락처: ${parentPhone || '(없음)'}`);
         console.log(`보고서 제목: ${reportTitle}`);
         console.log(`코멘트: ${comment || '(없음)'}`);
         console.log(message);
         console.log('---');
 
         results.push({
-          studentId: student._id,
-          studentName: student.name,
+          studentId,
+          studentName,
           success: true
         });
       } catch (error) {

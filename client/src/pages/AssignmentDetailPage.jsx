@@ -364,7 +364,7 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
         for (let i = 1; i <= questionCount; i++) {
           // 학생인 경우 정답을 보여주지 않음 (빈 문자열로 초기화)
           // 관리자나 강사인 경우에만 기존 정답 사용
-          const isStudent = user && (user.role === 'student' || !user.role);
+          const isStudent = user && (user.userType === '학생' || (!user.userType && !user.isAdmin));
           const existingAnswer = !isStudent && assignment.answers?.find(a => 
             a.questionNumber === i || a.questionNumber === String(i)
           );

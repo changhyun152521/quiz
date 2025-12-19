@@ -35,10 +35,10 @@ const getAllAssignments = async (req, res) => {
 };
 
 // GET /api/assignments/:id - 특정 과제 조회
+// studentId는 mathchang 사용자 ID(문자열)로 저장됨 (populate 불필요)
 const getAssignmentById = async (req, res) => {
   try {
-    const assignment = await Assignment.findById(req.params.id)
-      .populate('submissions.studentId', 'name email');
+    const assignment = await Assignment.findById(req.params.id);
 
     if (!assignment) {
       return res.status(404).json({
@@ -50,13 +50,15 @@ const getAssignmentById = async (req, res) => {
     // 학생인 경우 정답(answers) 제외
     // 단, 제출된 과제인 경우 정답 포함 (정답 확인을 위해)
     // req.user가 있으면 (인증된 경우) 역할 확인, 없으면 정답 제외 (안전을 위해)
+    // mathchang의 userType: '학생', '학부모', '강사'
     const user = req.user;
-    const isStudent = !user || (user.role === 'student' || !user.role);
-    
+    const isStudent = !user || (!user.isAdmin && user.userType !== '강사');
+
     console.log('[getAssignmentById] 사용자 정보 확인:', {
       hasUser: !!user,
       userId: user?._id,
-      userRole: user?.role,
+      userType: user?.userType,
+      isAdmin: user?.isAdmin,
       isStudent: isStudent
     });
     
@@ -80,7 +82,7 @@ const getAssignmentById = async (req, res) => {
         studentAnswersCount: sub.studentAnswers?.length,
         studentAnswers: sub.studentAnswers
       })),
-      user: user ? { _id: user._id, role: user.role } : null
+      user: user ? { _id: user._id, userType: user.userType, isAdmin: user.isAdmin } : null
     });
     
     // 학생인 경우
@@ -153,7 +155,8 @@ const getAssignmentById = async (req, res) => {
       solutionFileType: assignmentData.solutionFileType,
       isStudent: isStudent,
       hasUser: !!user,
-      userRole: user?.role
+      userType: user?.userType,
+      isAdmin: user?.isAdmin
     });
 
     // 최종 확인: 제출된 과제인데 정답이 없으면 경고

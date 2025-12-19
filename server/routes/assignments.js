@@ -17,17 +17,21 @@ router.get('/', getAllAssignments);
 // GET /api/assignments/:id - 특정 과제 조회
 // 인증은 선택적 (토큰이 있으면 사용자 정보 사용, 없으면 비회원으로 처리)
 router.get('/:id', async (req, res, next) => {
-  // 토큰이 있으면 authenticate 미들웨어 실행
+  // 토큰이 있으면 JWT 검증하여 사용자 정보 추출
   const token = req.header('Authorization')?.replace('Bearer ', '');
   if (token) {
     try {
-      const { verifyToken } = require('../utils/jwt');
-      const User = require('../models/User');
-      const decoded = verifyToken(token);
-      const user = await User.findById(decoded.userId).select('-password');
-      if (user) {
-        req.user = user;
-      }
+      const jwt = require('jsonwebtoken');
+      const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-key-change-in-production';
+      const decoded = jwt.verify(token, JWT_SECRET);
+      // JWT payload에서 사용자 정보 추출 (DB 조회 없음)
+      req.user = {
+        _id: decoded.id,
+        userId: decoded.userId,
+        userType: decoded.userType,
+        isAdmin: decoded.isAdmin,
+        name: decoded.name || decoded.userId
+      };
     } catch (error) {
       // 토큰이 유효하지 않아도 계속 진행 (비회원으로 처리)
       console.log('[getAssignmentById] 토큰 검증 실패, 비회원으로 처리:', error.message);

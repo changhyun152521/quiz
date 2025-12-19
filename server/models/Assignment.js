@@ -1,3 +1,6 @@
+// mathchang-quiz는 mathchang의 인증을 사용합니다.
+// 학생 ID는 mathchang의 사용자 _id(문자열)로 저장합니다.
+
 const mongoose = require('mongoose');
 
 const assignmentSchema = new mongoose.Schema({
@@ -133,9 +136,9 @@ const assignmentSchema = new mongoose.Schema({
   // 학생 제출 답안 및 채점 결과
   submissions: {
     type: [{
+      // mathchang 사용자 _id (ref 없이 ObjectId만 저장)
       studentId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
         required: true
       },
       studentAnswers: {

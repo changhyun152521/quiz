@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
 import { get } from '../utils/api'
-import SignUp from '../components/SignUp'
 import Login from '../components/Login'
 import '../App.css'
 
+// mathchang-quiz는 mathchang의 인증 시스템을 사용합니다.
+// 회원가입은 mathchang에서 진행합니다.
+
 function MainPage({ onLoginSuccess, onBackToDashboard, onShowCourseSelection, onLogout }) {
-  const [showSignUpModal, setShowSignUpModal] = useState(false)
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [showContent, setShowContent] = useState(false)
@@ -198,8 +199,9 @@ function MainPage({ onLoginSuccess, onBackToDashboard, onShowCourseSelection, on
                       // 유효한 토큰이 있으면 역할에 따라 처리
                       const user = data.data?.user || JSON.parse(userData)
                       
-                      // 학생인 경우 강좌 선택 모달 표시
-                      if (onShowCourseSelection && (user.role === 'student' || !user.role)) {
+                      // 학생인 경우 강좌 선택 모달 표시 (mathchang: userType이 '학생')
+                      const isStudent = user.userType === '학생' || user.role === 'student' || (!user.userType && !user.role);
+                      if (onShowCourseSelection && isStudent) {
                         // 먼저 로그인 상태 업데이트
                         onLoginSuccess(user, false)
                         // 그 다음 강좌 선택 모달 표시
@@ -232,11 +234,17 @@ function MainPage({ onLoginSuccess, onBackToDashboard, onShowCourseSelection, on
               {(() => {
                 if (!user) {
                   return '로그인하기'
-                } else if (user.role === 'student' || !user.role) {
+                }
+                // mathchang: userType 사용 (학생, 학부모, 강사)
+                const isStudent = user.userType === '학생' || user.role === 'student' || (!user.userType && !user.role);
+                const isTeacher = user.userType === '강사' || user.role === 'teacher';
+                const isAdmin = user.isAdmin || user.role === 'admin' || user.userId === 'admin';
+
+                if (isStudent) {
                   return '학습 시작하기'
-                } else if (user.role === 'teacher') {
+                } else if (isTeacher) {
                   return '강사 페이지'
-                } else if (user.role === 'admin' || user.userId === 'admin') {
+                } else if (isAdmin) {
                   return '관리자 페이지'
                 } else {
                   return '로그인하기'
@@ -259,8 +267,8 @@ function MainPage({ onLoginSuccess, onBackToDashboard, onShowCourseSelection, on
         </div>
       </footer>
 
-      <Login 
-        showModal={showLoginModal} 
+      <Login
+        showModal={showLoginModal}
         onClose={() => {
           setShowLoginModal(false);
           // 로그인 모달이 닫힐 때 사용자 정보 다시 확인
@@ -276,22 +284,9 @@ function MainPage({ onLoginSuccess, onBackToDashboard, onShowCourseSelection, on
             setUser(null);
           }
         }}
-        onShowSignUp={() => {
-          setShowLoginModal(false);
-          setShowSignUpModal(true);
-        }}
         onLoginSuccess={(userData) => {
           setUser(userData);
           onLoginSuccess(userData);
-        }}
-      />
-
-      <SignUp 
-        showModal={showSignUpModal} 
-        onClose={() => setShowSignUpModal(false)}
-        onShowLogin={() => {
-          setShowSignUpModal(false);
-          setShowLoginModal(true);
         }}
       />
       </div>

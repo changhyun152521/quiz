@@ -64,12 +64,34 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // 사용자 역할 확인 헬퍼 함수 (mathchang의 userType 사용)
+  const isStudent = (user) => {
+    if (!user) return false;
+    // mathchang: userType이 '학생' 또는 없는 경우
+    // 기존 호환성: role이 'student' 또는 없는 경우
+    return user.userType === '학생' || user.role === 'student' || (!user.userType && !user.role);
+  };
+
+  const isAdmin = (user) => {
+    if (!user) return false;
+    // mathchang: isAdmin이 true이거나 userType이 '강사'
+    // 기존 호환성: role이 'admin' 또는 userId가 'admin'
+    return user.isAdmin || user.userType === '강사' || user.role === 'admin' || user.userId === 'admin';
+  };
+
+  const isTeacher = (user) => {
+    if (!user) return false;
+    // mathchang: userType이 '강사'
+    // 기존 호환성: role이 'teacher'
+    return user.userType === '강사' || user.role === 'teacher';
+  };
+
   const handleLoginSuccess = (userData, showCourseModal = false) => {
     setIsLoggedIn(true)
     setUser(userData)
-    
+
     // 학생인 경우 로그인 성공 시 바로 강좌 선택 모달 표시
-    if (userData && (userData.role === 'student' || !userData.role)) {
+    if (userData && isStudent(userData)) {
       if (showCourseModal) {
         // 학습하기 버튼을 클릭했을 때 강좌 선택 모달 표시
         setShowCourseSelection(true)
@@ -79,7 +101,7 @@ function App() {
         setShowCourseSelection(true)
         setShowMainPage(false) // 메인페이지 숨김
       }
-    } else if (userData && (userData.role === 'admin' || userData.userId === 'admin' || userData.role === 'teacher')) {
+    } else if (userData && (isAdmin(userData) || isTeacher(userData))) {
       // 관리자나 강사는 바로 대시보드로
       setShowMainPage(false)
       setShowCourseSelection(false) // 명시적으로 false 설정
@@ -168,12 +190,12 @@ function App() {
   // 로그인 상태이고 메인페이지를 보여주지 않으면 Dashboard, AdminDashboard, 또는 TeacherDashboard 표시
   // 단, 강좌 선택 모달이 표시 중일 때는 제외
   if (isLoggedIn && user && !showMainPage && !showCourseSelection) {
-    // 관리자 계정인지 확인 (role이 'admin'이거나 userId가 'admin'인 경우)
-    if (user.role === 'admin' || user.userId === 'admin') {
+    // 관리자 계정인지 확인 (mathchang: isAdmin 또는 userId가 'admin')
+    if (isAdmin(user) && !isTeacher(user)) {
       return <AdminDashboardPage user={user} onLogout={handleLogout} onGoToMainPage={handleGoToMainPage} />
     }
-    // 강사 계정인지 확인
-    if (user.role === 'teacher') {
+    // 강사 계정인지 확인 (mathchang: userType이 '강사')
+    if (isTeacher(user)) {
       return <TeacherDashboardPage user={user} onLogout={handleLogout} onGoToMainPage={handleGoToMainPage} />
     }
     return <DashboardPage user={user} onLogout={handleLogout} onGoToMainPage={handleGoToMainPage} selectedCourse={selectedCourse} />
@@ -192,7 +214,7 @@ function App() {
           if (!user) {
             return;
           }
-          if (user.role === 'student' || !user.role) {
+          if (isStudent(user)) {
             setShowCourseSelection(true)
             setShowMainPage(true) // 메인페이지는 계속 표시
           }
@@ -200,11 +222,11 @@ function App() {
       />
       {/* 강좌 선택 모달은 showCourseSelection이 명시적으로 true이고 user가 학생일 때만 표시 */}
       {/* 조건을 더 엄격하게: showCourseSelection이 정확히 true이고, user가 존재하고, user._id가 있을 때만 */}
-      {showCourseSelection === true && 
-       user !== null && 
-       user !== undefined && 
-       user._id && 
-       (user.role === 'student' || !user.role) && (
+      {showCourseSelection === true &&
+       user !== null &&
+       user !== undefined &&
+       user._id &&
+       isStudent(user) && (
         <CourseSelectionModal
           showModal={true}
           onClose={() => {

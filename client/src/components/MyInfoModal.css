@@ -222,112 +222,43 @@
   cursor: not-allowed;
 }
 
-/* 비밀번호 변경 섹션 */
-.password-section {
+/* mathchang 안내 섹션 */
+.mathchang-section {
   border-top: 2px solid #e0e0e0;
   padding-top: 24px;
   margin-top: 24px;
 }
 
-.password-section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-
-.password-section-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: #1a1a1a;
-  margin: 0;
-  font-family: 'Pretendard', sans-serif;
-}
-
-.btn-toggle-password {
-  padding: 8px 16px;
-  background: #f5f5f5;
-  border: 1px solid #e0e0e0;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 500;
-  color: #333;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  font-family: 'Pretendard', sans-serif;
-}
-
-.btn-toggle-password:hover {
-  background: #e8e8e8;
-}
-
-.password-form {
-  margin-top: 20px;
-}
-
-.password-form-actions {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 20px;
-}
-
-/* 회원탈퇴 섹션 */
-.delete-section {
-  border-top: 2px solid #fee2e2;
-  padding-top: 24px;
-  margin-top: 32px;
-}
-
-.delete-section-header {
-  margin-bottom: 16px;
-}
-
-.delete-section-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: #dc2626;
-  margin: 0;
-  font-family: 'Pretendard', sans-serif;
-}
-
-.delete-section-content {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.delete-warning {
-  font-size: 14px;
-  color: #dc2626;
-  margin: 0;
-  font-family: 'Pretendard', sans-serif;
-  line-height: 1.5;
-}
-
-.btn-delete {
-  padding: 12px 24px;
-  background: #fee2e2;
-  color: #dc2626;
-  border: 1px solid #fecaca;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  font-family: 'Pretendard', sans-serif;
-  align-self: flex-start;
-}
-
-.btn-delete:hover:not(:disabled) {
-  background: #fecaca;
-  border-color: #fca5a5;
-}
-
-.btn-delete:disabled {
+.mathchang-notice {
+  text-align: center;
+  padding: 24px;
   background: #f9fafb;
-  color: #d1d5db;
-  border-color: #e5e7eb;
-  cursor: not-allowed;
+  border-radius: 8px;
+}
+
+.mathchang-notice p {
+  font-size: 14px;
+  color: #666;
+  margin: 0 0 16px 0;
+  line-height: 1.6;
+  font-family: 'Pretendard', sans-serif;
+}
+
+.btn-mathchang {
+  display: inline-block;
+  padding: 12px 24px;
+  background: #1a1a1a;
+  color: #ffffff;
+  text-decoration: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: 'Pretendard', sans-serif;
+  transition: all 0.2s ease;
+}
+
+.btn-mathchang:hover {
+  background: #333;
 }
 
 @keyframes fadeIn {

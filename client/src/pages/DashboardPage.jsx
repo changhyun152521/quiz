@@ -580,42 +580,6 @@ function DashboardPage({ user, onLogout, onGoToMainPage, selectedCourse }) {
         showModal={showMyInfoModal}
         onClose={() => setShowMyInfoModal(false)}
         user={user}
-        onUpdateUser={async (formData) => {
-          const token = localStorage.getItem('token');
-          const response = await put(`/api/users/${user._id}`, formData);
-
-          const data = await response.json();
-          if (!response.ok || !data.success) {
-            throw new Error(data.message || '정보 수정에 실패했습니다.');
-          }
-
-          // 사용자 정보 업데이트
-          const updatedUser = { ...user, ...formData };
-          localStorage.setItem('user', JSON.stringify(updatedUser));
-          window.location.reload(); // 페이지 새로고침하여 업데이트된 정보 반영
-        }}
-        onUpdatePassword={async (passwordData) => {
-          const response = await patch(`/api/users/${user._id}/password`, passwordData);
-
-          const data = await response.json();
-          if (!response.ok || !data.success) {
-            throw new Error(data.message || '비밀번호 변경에 실패했습니다.');
-          }
-        }}
-        onDeleteUser={async () => {
-          const response = await del(`/api/users/${user._id}`);
-
-          const data = await response.json();
-          if (!response.ok || !data.success) {
-            throw new Error(data.message || '회원탈퇴에 실패했습니다.');
-          }
-
-          // 로그아웃 처리
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
-          localStorage.removeItem('rememberMe');
-          onLogout();
-        }}
       />
     </div>
   );

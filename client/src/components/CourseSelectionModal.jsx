@@ -100,9 +100,17 @@ function CourseSelectionModal({ showModal, onClose, user, onCourseSelected }) {
         );
 
         if (!isAlreadyEnrolled) {
+          // 사용자 이름 확인
+          if (!user.name) {
+            alert('사용자 이름 정보가 없습니다. 다시 로그인해주세요.');
+            setIsSubmitting(false);
+            return;
+          }
+
           // 학생을 강좌에 등록
           const enrollResponse = await post(`/api/courses/${selectedCourseId}/students`, {
-            studentId: user._id
+            studentId: user._id,
+            studentName: user.name
           });
 
           const enrollData = await enrollResponse.json();
