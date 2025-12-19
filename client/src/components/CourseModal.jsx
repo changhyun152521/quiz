@@ -411,6 +411,7 @@ function CourseModal({ showModal, onClose, course, onSave, mode, teachers = [], 
                         {totalSelectedStudentPages > 1 && (
                           <div className="pagination">
                             <button
+                              type="button"
                               className="pagination-btn"
                               onClick={() => setCurrentSelectedStudentPage(prev => Math.max(1, prev - 1))}
                               disabled={currentSelectedStudentPage === 1}
@@ -420,6 +421,7 @@ function CourseModal({ showModal, onClose, course, onSave, mode, teachers = [], 
                             <div className="pagination-pages">
                               {Array.from({ length: totalSelectedStudentPages }, (_, i) => i + 1).map(page => (
                                 <button
+                                  type="button"
                                   key={page}
                                   className={`pagination-page-btn ${currentSelectedStudentPage === page ? 'active' : ''}`}
                                   onClick={() => setCurrentSelectedStudentPage(page)}
@@ -429,6 +431,7 @@ function CourseModal({ showModal, onClose, course, onSave, mode, teachers = [], 
                               ))}
                             </div>
                             <button
+                              type="button"
                               className="pagination-btn"
                               onClick={() => setCurrentSelectedStudentPage(prev => Math.min(totalSelectedStudentPages, prev + 1))}
                               disabled={currentSelectedStudentPage === totalSelectedStudentPages}
@@ -498,6 +501,7 @@ function CourseModal({ showModal, onClose, course, onSave, mode, teachers = [], 
                       {totalStudentPages > 1 && (
                         <div className="pagination">
                           <button
+                            type="button"
                             className="pagination-btn"
                             onClick={() => setCurrentStudentPage(prev => Math.max(1, prev - 1))}
                             disabled={currentStudentPage === 1}
@@ -507,6 +511,7 @@ function CourseModal({ showModal, onClose, course, onSave, mode, teachers = [], 
                           <div className="pagination-pages">
                             {Array.from({ length: totalStudentPages }, (_, i) => i + 1).map(page => (
                               <button
+                                type="button"
                                 key={page}
                                 className={`pagination-page-btn ${currentStudentPage === page ? 'active' : ''}`}
                                 onClick={() => setCurrentStudentPage(page)}
@@ -516,6 +521,7 @@ function CourseModal({ showModal, onClose, course, onSave, mode, teachers = [], 
                   ))}
                 </div>
                           <button
+                            type="button"
                             className="pagination-btn"
                             onClick={() => setCurrentStudentPage(prev => Math.min(totalStudentPages, prev + 1))}
                             disabled={currentStudentPage === totalStudentPages}
@@ -609,6 +615,7 @@ function CourseModal({ showModal, onClose, course, onSave, mode, teachers = [], 
                         {totalSelectedAssignmentPages > 1 && (
                           <div className="pagination">
                             <button
+                              type="button"
                               className="pagination-btn"
                               onClick={() => setCurrentSelectedAssignmentPage(prev => Math.max(1, prev - 1))}
                               disabled={currentSelectedAssignmentPage === 1}
@@ -618,6 +625,7 @@ function CourseModal({ showModal, onClose, course, onSave, mode, teachers = [], 
                             <div className="pagination-pages">
                               {Array.from({ length: totalSelectedAssignmentPages }, (_, i) => i + 1).map(page => (
                                 <button
+                                  type="button"
                                   key={page}
                                   className={`pagination-page-btn ${currentSelectedAssignmentPage === page ? 'active' : ''}`}
                                   onClick={() => setCurrentSelectedAssignmentPage(page)}
@@ -627,6 +635,7 @@ function CourseModal({ showModal, onClose, course, onSave, mode, teachers = [], 
                               ))}
                             </div>
                             <button
+                              type="button"
                               className="pagination-btn"
                               onClick={() => setCurrentSelectedAssignmentPage(prev => Math.min(totalSelectedAssignmentPages, prev + 1))}
                               disabled={currentSelectedAssignmentPage === totalSelectedAssignmentPages}
@@ -709,6 +718,7 @@ function CourseModal({ showModal, onClose, course, onSave, mode, teachers = [], 
                       {totalAssignmentPages > 1 && (
                         <div className="pagination">
                           <button
+                            type="button"
                             className="pagination-btn"
                             onClick={() => setCurrentAssignmentPage(prev => Math.max(1, prev - 1))}
                             disabled={currentAssignmentPage === 1}
@@ -718,6 +728,7 @@ function CourseModal({ showModal, onClose, course, onSave, mode, teachers = [], 
                           <div className="pagination-pages">
                             {Array.from({ length: totalAssignmentPages }, (_, i) => i + 1).map(page => (
                               <button
+                                type="button"
                                 key={page}
                                 className={`pagination-page-btn ${currentAssignmentPage === page ? 'active' : ''}`}
                                 onClick={() => setCurrentAssignmentPage(page)}
@@ -727,6 +738,7 @@ function CourseModal({ showModal, onClose, course, onSave, mode, teachers = [], 
                   ))}
                 </div>
                           <button
+                            type="button"
                             className="pagination-btn"
                             onClick={() => setCurrentAssignmentPage(prev => Math.min(totalAssignmentPages, prev + 1))}
                             disabled={currentAssignmentPage === totalAssignmentPages}
