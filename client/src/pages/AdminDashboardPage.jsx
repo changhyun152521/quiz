@@ -260,12 +260,31 @@ function AdminDashboardPage({ user, onLogout, onGoToMainPage }) {
       const token = localStorage.getItem('token');
       let response;
 
+      // 강사 이름 찾기
+      const selectedTeacher = teacherList.find(t => t._id === formData.teacher);
+      const teacherName = selectedTeacher?.name || '';
+
+      // 학생 이름 배열 생성
+      const studentNames = formData.students
+        .map(studentId => {
+          const student = students.find(s => s._id === studentId);
+          return student?.name || '';
+        })
+        .filter(name => name);
+
+      // API에 보낼 데이터
+      const courseData = {
+        ...formData,
+        teacherName,
+        studentNames
+      };
+
       if (courseId) {
         // 수정
-        response = await put(`/api/courses/${courseId}`, formData);
+        response = await put(`/api/courses/${courseId}`, courseData);
       } else {
         // 생성
-        response = await post('/api/courses', formData);
+        response = await post('/api/courses', courseData);
       }
 
       const data = await response.json();
