@@ -8,15 +8,23 @@ const Assignment = require('../models/Assignment');
 const MATHCHANG_API_URL = process.env.MATHCHANG_API_URL || 'https://api.mathchang.com';
 
 // GET /api/courses - 모든 강좌 조회 (페이지네이션 지원)
+// studentId 쿼리 파라미터가 있으면 해당 학생이 등록된 강좌만 반환
 const getAllCourses = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
+    const { studentId } = req.query;
+
+    // 필터 조건 설정
+    const filter = {};
+    if (studentId) {
+      filter.students = studentId;  // 해당 학생이 등록된 강좌만 필터링
+    }
 
     // teacher, students는 문자열 ID로 저장됨 (populate 불필요)
     // teacherName, studentNames에 이름 저장됨
-    const courses = await Course.find()
+    const courses = await Course.find(filter)
       .populate({
         path: 'assignments',
         select: 'assignmentName subject mainUnit subUnit questionCount assignmentType startDate dueDate submissions questionFileUrl questionFileType solutionFileUrl solutionFileType fileUrl fileType'
@@ -25,7 +33,7 @@ const getAllCourses = async (req, res) => {
       .skip(skip)
       .limit(limit);
 
-    const total = await Course.countDocuments();
+    const total = await Course.countDocuments(filter);
 
     res.json({
       success: true,

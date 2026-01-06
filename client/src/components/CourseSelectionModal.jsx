@@ -40,8 +40,8 @@ function CourseSelectionModal({ showModal, onClose, user, onCourseSelected }) {
 
     setIsLoading(true);
     try {
-      // 모든 강좌 목록 가져오기
-      const response = await get('/api/courses?limit=100');
+      // 학생이 등록된 강좌 목록만 가져오기
+      const response = await get(`/api/courses?limit=100&studentId=${user._id}`);
       
       // 응답 상태 확인
       if (!response.ok) {

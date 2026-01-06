@@ -256,10 +256,15 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
       const data = await response.json();
       if (response.ok && data.success) {
         alert(courseId ? '강좌 정보가 수정되었습니다.' : '강좌가 추가되었습니다.');
-        // 상태 업데이트는 모달이 닫힌 후에 수행
-        setTimeout(() => {
-        fetchCourses();
-        }, 100);
+        // 서버에서 반환한 업데이트된 데이터로 즉시 상태 업데이트
+        if (courseId && data.data) {
+          setCourses(prevCourses =>
+            prevCourses.map(c => c._id === courseId ? data.data : c)
+          );
+        } else {
+          // 새 강좌 추가 시 전체 목록 새로고침
+          await fetchCourses();
+        }
       } else {
         alert(data.message || '저장에 실패했습니다.');
         throw new Error(data.message || '저장에 실패했습니다.');
