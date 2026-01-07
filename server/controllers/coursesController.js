@@ -20,16 +20,23 @@ const fetchStudentsByIds = async (studentIds, authHeader) => {
     });
 
     const data = await response.json();
-    if (!response.ok) return [];
+    if (!response.ok) {
+      console.error('학생 정보 API 응답 오류:', response.status, data);
+      return [];
+    }
 
     const users = data.data || data;
     const studentIdStrings = studentIds.map(id => String(id));
 
     // 학생 ID에 해당하는 사용자만 필터링하고 순서 유지
-    return studentIdStrings.map(id => {
+    const result = studentIdStrings.map(id => {
       const user = users.find(u => String(u._id) === id);
+      if (!user) {
+        console.log(`학생 ID ${id}에 해당하는 사용자를 찾을 수 없음`);
+      }
       return user ? { _id: user._id, name: user.name, userId: user.userId } : { _id: id, name: '알 수 없음' };
     });
+    return result;
   } catch (error) {
     console.error('학생 정보 조회 오류:', error);
     return studentIds.map(id => ({ _id: String(id), name: '알 수 없음' }));
@@ -180,10 +187,13 @@ const createCourse = async (req, res) => {
     const populatedCourse = await Course.findById(savedCourse._id)
       .populate('assignments', 'assignmentName subject mainUnit subUnit questionCount assignmentType startDate dueDate questionFileUrl questionFileType solutionFileUrl solutionFileType fileUrl fileType');
 
+    // 학생 정보 join
+    const coursesWithStudents = await populateStudents([populatedCourse], req.headers.authorization);
+
     res.status(201).json({
       success: true,
       message: '강좌가 성공적으로 생성되었습니다',
-      data: populatedCourse
+      data: coursesWithStudents[0]
     });
   } catch (error) {
     if (error.name === 'ValidationError') {
@@ -285,10 +295,13 @@ const updateCourse = async (req, res) => {
     const populatedCourse = await Course.findById(updatedCourse._id)
       .populate('assignments', 'assignmentName subject mainUnit subUnit questionCount assignmentType startDate dueDate questionFileUrl questionFileType solutionFileUrl solutionFileType fileUrl fileType');
 
+    // 학생 정보 join
+    const coursesWithStudents = await populateStudents([populatedCourse], req.headers.authorization);
+
     res.json({
       success: true,
       message: '강좌 정보가 성공적으로 수정되었습니다',
-      data: populatedCourse
+      data: coursesWithStudents[0]
     });
   } catch (error) {
     if (error.name === 'ValidationError') {
@@ -354,7 +367,8 @@ const addStudentToCourse = async (req, res) => {
     }
 
     // 이미 등록된 학생인지 확인
-    if (course.students.includes(studentId)) {
+    const studentIdStr = String(studentId);
+    if (course.students.some(id => String(id) === studentIdStr)) {
       return res.status(409).json({
         success: false,
         message: '이미 등록된 학생입니다'
@@ -366,10 +380,13 @@ const addStudentToCourse = async (req, res) => {
 
     const updatedCourse = await course.save();
 
+    // 학생 정보 join
+    const coursesWithStudents = await populateStudents([updatedCourse], req.headers.authorization);
+
     res.json({
       success: true,
       message: '학생이 등록되었습니다',
-      data: updatedCourse
+      data: coursesWithStudents[0]
     });
   } catch (error) {
     res.status(500).json({
@@ -395,7 +412,7 @@ const removeStudentFromCourse = async (req, res) => {
     }
 
     // 학생이 등록되어 있는지 확인
-    const studentIndex = course.students.indexOf(studentId);
+    const studentIndex = course.students.findIndex(id => String(id) === String(studentId));
     if (studentIndex === -1) {
       return res.status(404).json({
         success: false,
@@ -408,10 +425,13 @@ const removeStudentFromCourse = async (req, res) => {
 
     const updatedCourse = await course.save();
 
+    // 학생 정보 join
+    const coursesWithStudents = await populateStudents([updatedCourse], req.headers.authorization);
+
     res.json({
       success: true,
       message: '학생이 취소되었습니다',
-      data: updatedCourse
+      data: coursesWithStudents[0]
     });
   } catch (error) {
     res.status(500).json({
@@ -563,7 +583,8 @@ const addAssignmentToCourse = async (req, res) => {
     }
 
     // 이미 등록된 과제인지 확인
-    if (course.assignments.includes(assignmentId)) {
+    const assignmentIdStr = String(assignmentId);
+    if (course.assignments.some(id => String(id) === assignmentIdStr)) {
       return res.status(409).json({
         success: false,
         message: '이미 등록된 과제입니다'
@@ -579,10 +600,13 @@ const addAssignmentToCourse = async (req, res) => {
     const populatedCourse = await Course.findById(updatedCourse._id)
       .populate('assignments', 'assignmentName subject mainUnit subUnit questionCount assignmentType startDate dueDate questionFileUrl questionFileType solutionFileUrl solutionFileType fileUrl fileType');
 
+    // 학생 정보 join
+    const coursesWithStudents = await populateStudents([populatedCourse], req.headers.authorization);
+
     res.json({
       success: true,
       message: '과제가 등록되었습니다',
-      data: populatedCourse
+      data: coursesWithStudents[0]
     });
   } catch (error) {
     res.status(500).json({
@@ -608,7 +632,7 @@ const removeAssignmentFromCourse = async (req, res) => {
     }
 
     // 과제가 등록되어 있는지 확인
-    const assignmentIndex = course.assignments.indexOf(assignmentId);
+    const assignmentIndex = course.assignments.findIndex(id => String(id) === String(assignmentId));
     if (assignmentIndex === -1) {
       return res.status(404).json({
         success: false,
@@ -625,10 +649,13 @@ const removeAssignmentFromCourse = async (req, res) => {
     const populatedCourse = await Course.findById(updatedCourse._id)
       .populate('assignments', 'assignmentName subject mainUnit subUnit questionCount assignmentType startDate dueDate questionFileUrl questionFileType solutionFileUrl solutionFileType fileUrl fileType');
 
+    // 학생 정보 join
+    const coursesWithStudents = await populateStudents([populatedCourse], req.headers.authorization);
+
     res.json({
       success: true,
       message: '과제가 제거되었습니다',
-      data: populatedCourse
+      data: coursesWithStudents[0]
     });
   } catch (error) {
     res.status(500).json({

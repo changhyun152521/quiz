@@ -67,8 +67,9 @@ function CourseModal({ showModal, onClose, course, onSave, mode, teachers = [], 
   };
 
   // 학생 검색 필터링 (이미 선택된 학생 제외)
+  const formStudentIds = formData.students.map(id => String(id));
   const filteredStudents = students
-    .filter(student => !formData.students.includes(student._id)) // 이미 선택된 학생 제외
+    .filter(student => !formStudentIds.includes(String(student._id))) // 이미 선택된 학생 제외
     .filter(student => {
       if (!studentSearchTerm) return true;
       const term = studentSearchTerm.toLowerCase();
@@ -120,7 +121,7 @@ function CourseModal({ showModal, onClose, course, onSave, mode, teachers = [], 
 
   // 선택된 학생 검색 필터링
   const filteredSelectedStudents = formData.students
-    .map(studentId => students.find(s => s._id === studentId))
+    .map(studentId => students.find(s => String(s._id) === String(studentId)))
     .filter(student => {
       if (!student) return false;
       if (!selectedStudentSearchTerm) return true;
@@ -197,12 +198,13 @@ function CourseModal({ showModal, onClose, course, onSave, mode, teachers = [], 
   const handleMultiSelect = (name, value) => {
     setFormData(prev => {
       const currentValues = prev[name] || [];
-      const isSelected = currentValues.includes(value);
-      
+      const valueStr = String(value);
+      const isSelected = currentValues.some(v => String(v) === valueStr);
+
       return {
         ...prev,
         [name]: isSelected
-          ? currentValues.filter(v => v !== value)
+          ? currentValues.filter(v => String(v) !== valueStr)
           : [...currentValues, value]
       };
     });
@@ -212,22 +214,24 @@ function CourseModal({ showModal, onClose, course, onSave, mode, teachers = [], 
   const handleSelectAll = (name, items) => {
     setFormData(prev => {
       const currentValues = prev[name] || [];
+      const currentValueStrings = currentValues.map(v => String(v));
       const availableItems = items.map(item => item._id).filter(id => id);
-      
+      const availableItemStrings = availableItems.map(id => String(id));
+
       // 현재 페이지의 모든 항목이 선택되어 있는지 확인
-      const allSelected = availableItems.every(id => currentValues.includes(id));
-      
+      const allSelected = availableItemStrings.every(id => currentValueStrings.includes(id));
+
       if (allSelected) {
         // 모두 선택되어 있으면 현재 페이지 항목만 해제
         return {
           ...prev,
-          [name]: currentValues.filter(id => !availableItems.includes(id))
+          [name]: currentValues.filter(id => !availableItemStrings.includes(String(id)))
         };
       } else {
         // 일부만 선택되어 있으면 현재 페이지 항목 모두 선택
         const newValues = [...currentValues];
         availableItems.forEach(id => {
-          if (!newValues.includes(id)) {
+          if (!currentValueStrings.includes(String(id))) {
             newValues.push(id);
           }
         });
@@ -460,7 +464,7 @@ function CourseModal({ showModal, onClose, course, onSave, mode, teachers = [], 
                         <div className="select-all-container" style={{ padding: '8px 12px', borderBottom: '1px solid #ddd', display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#f5f5f5' }}>
                           <input
                             type="checkbox"
-                            checked={paginatedStudents.length > 0 && paginatedStudents.every(student => formData.students.includes(student._id))}
+                            checked={paginatedStudents.length > 0 && paginatedStudents.every(student => formStudentIds.includes(String(student._id)))}
                             onChange={() => handleSelectAll('students', paginatedStudents)}
                             style={{ cursor: 'pointer', width: '18px', height: '18px' }}
                           />
@@ -475,7 +479,7 @@ function CourseModal({ showModal, onClose, course, onSave, mode, teachers = [], 
                             <label key={student._id} className="checkbox-item student-item">
                       <input
                         type="checkbox"
-                        checked={formData.students.includes(student._id)}
+                        checked={formStudentIds.includes(String(student._id))}
                         onChange={() => handleMultiSelect('students', student._id)}
                       />
                               <div className="student-info">

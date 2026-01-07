@@ -1,15 +1,19 @@
 const mongoose = require('mongoose');
 
+// mathchang DB 연결 (User 조회용)
+let mathchangConnection = null;
+
 const connectDB = async () => {
   try {
     // MONGODB_ATLAS_URL을 우선적으로 사용, 없으면 MONGODB_URI 사용, 둘 다 없으면 로컬 주소 사용
     let mongoURI;
-    
+
     // 디버깅: 환경변수 확인
     console.log('Environment variables check:');
     console.log('MONGODB_ATLAS_URL:', process.env.MONGODB_ATLAS_URL ? 'SET' : 'NOT SET');
     console.log('MONGODB_URI:', process.env.MONGODB_URI ? 'SET' : 'NOT SET');
-    
+    console.log('MATHCHANG_DB_URL:', process.env.MATHCHANG_DB_URL ? 'SET' : 'NOT SET');
+
     if (process.env.MONGODB_ATLAS_URL) {
       mongoURI = process.env.MONGODB_ATLAS_URL;
       console.log('✓ Using MongoDB Atlas URL');
@@ -35,6 +39,23 @@ const connectDB = async () => {
     });
 
     console.log(`MongoDB Connected: ${conn.connection.host}`);
+
+    // mathchang DB 연결 (User 조회용)
+    if (process.env.MATHCHANG_DB_URL) {
+      try {
+        mathchangConnection = mongoose.createConnection(process.env.MATHCHANG_DB_URL, {
+          serverSelectionTimeoutMS: 5000,
+        });
+        await mathchangConnection.asPromise();
+        console.log('✓ mathchang DB Connected for User lookup');
+      } catch (mathchangErr) {
+        console.error('⚠ mathchang DB connection failed:', mathchangErr.message);
+        console.error('  User lookup may not work correctly');
+      }
+    } else {
+      console.log('⚠ MATHCHANG_DB_URL not set - User lookup will use quiz DB');
+    }
+
     return conn;
   } catch (error) {
     console.error(`MongoDB Connection Error: ${error.message}`);
@@ -46,6 +67,8 @@ const connectDB = async () => {
   }
 };
 
+// mathchang DB 연결 객체 반환
+const getMathchangConnection = () => mathchangConnection;
+
 module.exports = connectDB;
-
-
+module.exports.getMathchangConnection = getMathchangConnection;

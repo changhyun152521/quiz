@@ -1,5 +1,5 @@
 const Assignment = require('../models/Assignment');
-const User = require('../models/User');
+const getUser = require('../models/User');
 const { deleteFile, cloudinary } = require('../utils/cloudinary');
 
 // GET /api/assignments - 모든 과제 조회 (페이지네이션 지원)
@@ -36,17 +36,54 @@ const getAllAssignments = async (req, res) => {
 };
 
 // GET /api/assignments/:id - 특정 과제 조회
-// submissions.studentId를 User 모델과 populate하여 학생 이름 포함
+// submissions.studentId를 mathchang DB의 User에서 조회하여 학생 이름 포함
 const getAssignmentById = async (req, res) => {
   try {
-    const assignment = await Assignment.findById(req.params.id)
-      .populate('submissions.studentId', 'name userId');
+    const assignment = await Assignment.findById(req.params.id);
 
     if (!assignment) {
       return res.status(404).json({
         success: false,
         message: '과제를 찾을 수 없습니다'
       });
+    }
+
+    const assignmentObj = assignment.toObject();
+
+    // submissions의 studentId에 대해 mathchang DB에서 User 정보 조회
+    if (assignmentObj.submissions && assignmentObj.submissions.length > 0) {
+      const User = getUser();
+
+      for (let i = 0; i < assignmentObj.submissions.length; i++) {
+        const sub = assignmentObj.submissions[i];
+        if (sub.studentId) {
+          try {
+            const studentIdStr = sub.studentId.toString();
+            const user = await User.findById(studentIdStr).select('name userId');
+            if (user) {
+              assignmentObj.submissions[i].studentId = {
+                _id: studentIdStr,
+                name: user.name,
+                userId: user.userId
+              };
+            } else {
+              // User를 찾을 수 없는 경우 ID만 유지
+              assignmentObj.submissions[i].studentId = {
+                _id: studentIdStr,
+                name: null,
+                userId: null
+              };
+            }
+          } catch (err) {
+            console.log(`[getAssignmentById] User 조회 실패: ${sub.studentId}`, err.message);
+            assignmentObj.submissions[i].studentId = {
+              _id: sub.studentId.toString(),
+              name: null,
+              userId: null
+            };
+          }
+        }
+      }
     }
 
     // 학생인 경우 정답(answers) 제외
@@ -63,22 +100,20 @@ const getAssignmentById = async (req, res) => {
       isAdmin: user?.isAdmin,
       isStudent: isStudent
     });
-    
-    const assignmentData = assignment.toObject();
-    
+
     // 디버깅 로그
     console.log('[getAssignmentById] assignment 데이터:', {
       assignmentId: assignment._id,
-      hasAnswers: !!assignmentData.answers,
-      answersCount: assignmentData.answers?.length,
-      hasSubmissions: !!assignmentData.submissions,
-      submissionsCount: assignmentData.submissions?.length,
-      hasSolutionFileUrl: !!assignmentData.solutionFileUrl,
-      solutionFileUrlCount: assignmentData.solutionFileUrl?.length || 0,
-      solutionFileUrl: assignmentData.solutionFileUrl,
-      hasSolutionFileType: !!assignmentData.solutionFileType,
-      solutionFileType: assignmentData.solutionFileType,
-      submissions: assignmentData.submissions?.map(sub => ({
+      hasAnswers: !!assignmentObj.answers,
+      answersCount: assignmentObj.answers?.length,
+      hasSubmissions: !!assignmentObj.submissions,
+      submissionsCount: assignmentObj.submissions?.length,
+      hasSolutionFileUrl: !!assignmentObj.solutionFileUrl,
+      solutionFileUrlCount: assignmentObj.solutionFileUrl?.length || 0,
+      solutionFileUrl: assignmentObj.solutionFileUrl,
+      hasSolutionFileType: !!assignmentObj.solutionFileType,
+      solutionFileType: assignmentObj.solutionFileType,
+      submissions: assignmentObj.submissions?.map(sub => ({
         studentId: sub.studentId?._id || sub.studentId,
         hasStudentAnswers: !!sub.studentAnswers,
         studentAnswersCount: sub.studentAnswers?.length,
@@ -86,75 +121,75 @@ const getAssignmentById = async (req, res) => {
       })),
       user: user ? { _id: user._id, userType: user.userType, isAdmin: user.isAdmin } : null
     });
-    
+
     // 학생인 경우
     if (isStudent && user) {
       // 제출 여부 확인
-      const hasSubmission = assignment.submissions && assignment.submissions.some(
+      const hasSubmission = assignmentObj.submissions && assignmentObj.submissions.some(
         sub => {
           const subStudentId = sub.studentId?._id || sub.studentId;
           const userId = user._id;
           return subStudentId && userId && String(subStudentId) === String(userId);
         }
       );
-      
+
       console.log('[getAssignmentById] 제출 여부 확인:', {
         hasSubmission,
         userId: user._id,
-        hasAnswers: !!assignmentData.answers,
-        answersCount: assignmentData.answers?.length,
-        submissions: assignment.submissions?.map(sub => ({
+        hasAnswers: !!assignmentObj.answers,
+        answersCount: assignmentObj.answers?.length,
+        submissions: assignmentObj.submissions?.map(sub => ({
           studentId: sub.studentId?._id || sub.studentId,
           hasStudentAnswers: !!sub.studentAnswers,
           studentAnswers: sub.studentAnswers
         }))
       });
-      
+
       // 제출하지 않은 경우에만 정답 제외
       if (!hasSubmission) {
         console.log('[getAssignmentById] 제출하지 않음 - 정답 제외');
-        delete assignmentData.answers;
+        delete assignmentObj.answers;
       } else {
         // 제출한 경우 정답 포함 (정답 확인을 위해)
-        // assignmentData.answers가 없으면 원본 assignment에서 가져오기
-        if (!assignmentData.answers || assignmentData.answers.length === 0) {
+        // assignmentObj.answers가 없으면 원본 assignment에서 가져오기
+        if (!assignmentObj.answers || assignmentObj.answers.length === 0) {
           if (assignment.answers && assignment.answers.length > 0) {
-            console.log('[getAssignmentById] assignmentData에 정답이 없어서 원본에서 가져옵니다:', {
+            console.log('[getAssignmentById] assignmentObj에 정답이 없어서 원본에서 가져옵니다:', {
               answersCount: assignment.answers.length,
               answers: assignment.answers
             });
-            assignmentData.answers = assignment.answers;
+            assignmentObj.answers = assignment.answers;
           }
         }
         console.log('[getAssignmentById] 제출함 - 정답 포함:', {
-          hasAnswers: !!assignmentData.answers,
-          answersCount: assignmentData.answers?.length,
-          answers: assignmentData.answers
+          hasAnswers: !!assignmentObj.answers,
+          answersCount: assignmentObj.answers?.length,
+          answers: assignmentObj.answers
         });
       }
     } else if (isStudent && !user) {
       // 인증되지 않은 경우 정답 제외
       console.log('[getAssignmentById] 인증되지 않음 - 정답 제외');
-      delete assignmentData.answers;
+      delete assignmentObj.answers;
     } else {
       // 관리자나 강사인 경우 정답 포함
       console.log('[getAssignmentById] 관리자/강사 - 정답 포함:', {
-        hasAnswers: !!assignmentData.answers,
-        answersCount: assignmentData.answers?.length
+        hasAnswers: !!assignmentObj.answers,
+        answersCount: assignmentObj.answers?.length
       });
     }
 
     console.log('[getAssignmentById] 최종 반환 데이터:', {
-      hasAnswers: !!assignmentData.answers,
-      answersCount: assignmentData.answers?.length,
-      answers: assignmentData.answers, // 정답 내용도 로그에 포함
-      hasSubmissions: !!assignmentData.submissions,
-      submissionsCount: assignmentData.submissions?.length,
-      hasSolutionFileUrl: !!assignmentData.solutionFileUrl,
-      solutionFileUrlCount: assignmentData.solutionFileUrl?.length || 0,
-      solutionFileUrl: assignmentData.solutionFileUrl,
-      hasSolutionFileType: !!assignmentData.solutionFileType,
-      solutionFileType: assignmentData.solutionFileType,
+      hasAnswers: !!assignmentObj.answers,
+      answersCount: assignmentObj.answers?.length,
+      answers: assignmentObj.answers, // 정답 내용도 로그에 포함
+      hasSubmissions: !!assignmentObj.submissions,
+      submissionsCount: assignmentObj.submissions?.length,
+      hasSolutionFileUrl: !!assignmentObj.solutionFileUrl,
+      solutionFileUrlCount: assignmentObj.solutionFileUrl?.length || 0,
+      solutionFileUrl: assignmentObj.solutionFileUrl,
+      hasSolutionFileType: !!assignmentObj.solutionFileType,
+      solutionFileType: assignmentObj.solutionFileType,
       isStudent: isStudent,
       hasUser: !!user,
       userType: user?.userType,
@@ -162,34 +197,34 @@ const getAssignmentById = async (req, res) => {
     });
 
     // 최종 확인: 제출된 과제인데 정답이 없으면 경고
-    if (isStudent && user && assignmentData.submissions && assignmentData.submissions.some(
+    if (isStudent && user && assignmentObj.submissions && assignmentObj.submissions.some(
       sub => {
         const subStudentId = sub.studentId?._id || sub.studentId;
         return subStudentId && String(subStudentId) === String(user._id);
       }
-    ) && (!assignmentData.answers || assignmentData.answers.length === 0)) {
+    ) && (!assignmentObj.answers || assignmentObj.answers.length === 0)) {
       console.error('[getAssignmentById] 경고: 제출된 과제인데 정답이 없습니다!', {
         assignmentId: assignment._id,
         userId: user._id,
         assignmentHasAnswers: !!assignment.answers,
         assignmentAnswersCount: assignment.answers?.length,
-        assignmentDataHasAnswers: !!assignmentData.answers,
-        assignmentDataAnswersCount: assignmentData.answers?.length
+        assignmentObjHasAnswers: !!assignmentObj.answers,
+        assignmentObjAnswersCount: assignmentObj.answers?.length
       });
-      
+
       // 원본 assignment에 정답이 있으면 포함
       if (assignment.answers && assignment.answers.length > 0) {
         console.log('[getAssignmentById] 원본 assignment에 정답이 있음, 포함합니다:', {
           answersCount: assignment.answers.length,
           answers: assignment.answers
         });
-        assignmentData.answers = assignment.answers;
+        assignmentObj.answers = assignment.answers;
       }
     }
 
     res.json({
       success: true,
-      data: assignmentData
+      data: assignmentObj
     });
   } catch (error) {
     res.status(500).json({
