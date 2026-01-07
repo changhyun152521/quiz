@@ -27,9 +27,6 @@ const login = async (req, res) => {
 
     const data = await response.json();
 
-    // 디버깅: mathchang 응답 로그
-    console.log('mathchang 로그인 응답:', JSON.stringify(data, null, 2));
-
     // mathchang 응답을 그대로 반환
     if (!response.ok) {
       return res.status(response.status).json(data);

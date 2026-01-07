@@ -75,7 +75,6 @@ const getAssignmentById = async (req, res) => {
               };
             }
           } catch (err) {
-            console.log(`[getAssignmentById] User 조회 실패: ${sub.studentId}`, err.message);
             assignmentObj.submissions[i].studentId = {
               _id: sub.studentId.toString(),
               name: null,
@@ -93,35 +92,6 @@ const getAssignmentById = async (req, res) => {
     const user = req.user;
     const isStudent = !user || (!user.isAdmin && user.userType !== '강사');
 
-    console.log('[getAssignmentById] 사용자 정보 확인:', {
-      hasUser: !!user,
-      userId: user?._id,
-      userType: user?.userType,
-      isAdmin: user?.isAdmin,
-      isStudent: isStudent
-    });
-
-    // 디버깅 로그
-    console.log('[getAssignmentById] assignment 데이터:', {
-      assignmentId: assignment._id,
-      hasAnswers: !!assignmentObj.answers,
-      answersCount: assignmentObj.answers?.length,
-      hasSubmissions: !!assignmentObj.submissions,
-      submissionsCount: assignmentObj.submissions?.length,
-      hasSolutionFileUrl: !!assignmentObj.solutionFileUrl,
-      solutionFileUrlCount: assignmentObj.solutionFileUrl?.length || 0,
-      solutionFileUrl: assignmentObj.solutionFileUrl,
-      hasSolutionFileType: !!assignmentObj.solutionFileType,
-      solutionFileType: assignmentObj.solutionFileType,
-      submissions: assignmentObj.submissions?.map(sub => ({
-        studentId: sub.studentId?._id || sub.studentId,
-        hasStudentAnswers: !!sub.studentAnswers,
-        studentAnswersCount: sub.studentAnswers?.length,
-        studentAnswers: sub.studentAnswers
-      })),
-      user: user ? { _id: user._id, userType: user.userType, isAdmin: user.isAdmin } : null
-    });
-
     // 학생인 경우
     if (isStudent && user) {
       // 제출 여부 확인
@@ -133,91 +103,33 @@ const getAssignmentById = async (req, res) => {
         }
       );
 
-      console.log('[getAssignmentById] 제출 여부 확인:', {
-        hasSubmission,
-        userId: user._id,
-        hasAnswers: !!assignmentObj.answers,
-        answersCount: assignmentObj.answers?.length,
-        submissions: assignmentObj.submissions?.map(sub => ({
-          studentId: sub.studentId?._id || sub.studentId,
-          hasStudentAnswers: !!sub.studentAnswers,
-          studentAnswers: sub.studentAnswers
-        }))
-      });
-
       // 제출하지 않은 경우에만 정답 제외
       if (!hasSubmission) {
-        console.log('[getAssignmentById] 제출하지 않음 - 정답 제외');
         delete assignmentObj.answers;
       } else {
         // 제출한 경우 정답 포함 (정답 확인을 위해)
         // assignmentObj.answers가 없으면 원본 assignment에서 가져오기
         if (!assignmentObj.answers || assignmentObj.answers.length === 0) {
           if (assignment.answers && assignment.answers.length > 0) {
-            console.log('[getAssignmentById] assignmentObj에 정답이 없어서 원본에서 가져옵니다:', {
-              answersCount: assignment.answers.length,
-              answers: assignment.answers
-            });
             assignmentObj.answers = assignment.answers;
           }
         }
-        console.log('[getAssignmentById] 제출함 - 정답 포함:', {
-          hasAnswers: !!assignmentObj.answers,
-          answersCount: assignmentObj.answers?.length,
-          answers: assignmentObj.answers
-        });
       }
     } else if (isStudent && !user) {
       // 인증되지 않은 경우 정답 제외
-      console.log('[getAssignmentById] 인증되지 않음 - 정답 제외');
       delete assignmentObj.answers;
-    } else {
-      // 관리자나 강사인 경우 정답 포함
-      console.log('[getAssignmentById] 관리자/강사 - 정답 포함:', {
-        hasAnswers: !!assignmentObj.answers,
-        answersCount: assignmentObj.answers?.length
-      });
     }
+    // 관리자나 강사인 경우 정답 포함 (기본 동작)
 
-    console.log('[getAssignmentById] 최종 반환 데이터:', {
-      hasAnswers: !!assignmentObj.answers,
-      answersCount: assignmentObj.answers?.length,
-      answers: assignmentObj.answers, // 정답 내용도 로그에 포함
-      hasSubmissions: !!assignmentObj.submissions,
-      submissionsCount: assignmentObj.submissions?.length,
-      hasSolutionFileUrl: !!assignmentObj.solutionFileUrl,
-      solutionFileUrlCount: assignmentObj.solutionFileUrl?.length || 0,
-      solutionFileUrl: assignmentObj.solutionFileUrl,
-      hasSolutionFileType: !!assignmentObj.solutionFileType,
-      solutionFileType: assignmentObj.solutionFileType,
-      isStudent: isStudent,
-      hasUser: !!user,
-      userType: user?.userType,
-      isAdmin: user?.isAdmin
-    });
-
-    // 최종 확인: 제출된 과제인데 정답이 없으면 경고
+    // 최종 확인: 제출된 과제인데 정답이 없으면 원본에서 가져오기
     if (isStudent && user && assignmentObj.submissions && assignmentObj.submissions.some(
       sub => {
         const subStudentId = sub.studentId?._id || sub.studentId;
         return subStudentId && String(subStudentId) === String(user._id);
       }
     ) && (!assignmentObj.answers || assignmentObj.answers.length === 0)) {
-      console.error('[getAssignmentById] 경고: 제출된 과제인데 정답이 없습니다!', {
-        assignmentId: assignment._id,
-        userId: user._id,
-        assignmentHasAnswers: !!assignment.answers,
-        assignmentAnswersCount: assignment.answers?.length,
-        assignmentObjHasAnswers: !!assignmentObj.answers,
-        assignmentObjAnswersCount: assignmentObj.answers?.length
-      });
-
       // 원본 assignment에 정답이 있으면 포함
       if (assignment.answers && assignment.answers.length > 0) {
-        console.log('[getAssignmentById] 원본 assignment에 정답이 있음, 포함합니다:', {
-          answersCount: assignment.answers.length,
-          answers: assignment.answers
-        });
         assignmentObj.answers = assignment.answers;
       }
     }
@@ -405,19 +317,15 @@ const updateAssignment = async (req, res) => {
     if (fileType !== undefined) updateData.fileType = fileType; // 하위 호환성 유지
     if (questionFileUrl !== undefined) {
       updateData.questionFileUrl = Array.isArray(questionFileUrl) ? questionFileUrl : (questionFileUrl ? [questionFileUrl] : []);
-      console.log('[updateAssignment] questionFileUrl 업데이트:', updateData.questionFileUrl);
     }
     if (questionFileType !== undefined) {
       updateData.questionFileType = Array.isArray(questionFileType) ? questionFileType : (questionFileType ? [questionFileType] : []);
-      console.log('[updateAssignment] questionFileType 업데이트:', updateData.questionFileType);
     }
     if (solutionFileUrl !== undefined) {
       updateData.solutionFileUrl = Array.isArray(solutionFileUrl) ? solutionFileUrl : (solutionFileUrl ? [solutionFileUrl] : []);
-      console.log('[updateAssignment] solutionFileUrl 업데이트:', updateData.solutionFileUrl);
     }
     if (solutionFileType !== undefined) {
       updateData.solutionFileType = Array.isArray(solutionFileType) ? solutionFileType : (solutionFileType ? [solutionFileType] : []);
-      console.log('[updateAssignment] solutionFileType 업데이트:', updateData.solutionFileType);
     }
     // answers 필드 처리
     if (answers !== undefined) {
@@ -593,8 +501,6 @@ const deleteAssignment = async (req, res) => {
     const fileUrls = Array.isArray(assignment.fileUrl) ? assignment.fileUrl : (assignment.fileUrl ? [assignment.fileUrl] : []);
     const fileTypes = Array.isArray(assignment.fileType) ? assignment.fileType : (assignment.fileType ? [assignment.fileType] : []);
 
-    console.log(`[과제 삭제] 과제 ${req.params.id}의 원본 파일 ${fileUrls.length}개 삭제 시작...`);
-    
     for (let i = 0; i < fileUrls.length; i++) {
       const fileUrl = fileUrls[i];
       const fileType = fileTypes[i] || 'image'; // 기본값은 image
@@ -607,40 +513,23 @@ const deleteAssignment = async (req, res) => {
           
           // Cloudinary에서 파일 삭제
           deletePromises.push(
-            deleteFile(urlInfo.publicId, resourceType).catch(error => {
-              // 개별 파일 삭제 실패는 로그만 남기고 계속 진행
-              console.error(`[과제 삭제] 원본 파일 삭제 실패 (public_id: ${urlInfo.publicId}, resource_type: ${resourceType}):`, error.message);
-              return null; // 에러를 throw하지 않고 null 반환
-            })
+            deleteFile(urlInfo.publicId, resourceType).catch(() => null)
           );
-        } else {
-          console.warn(`[과제 삭제] Cloudinary URL에서 public_id를 추출할 수 없습니다: ${fileUrl}`);
         }
       }
     }
 
     // 2. 모든 학생 풀이 이미지 삭제
     if (assignment.submissions && Array.isArray(assignment.submissions) && assignment.submissions.length > 0) {
-      console.log(`[과제 삭제] 학생 제출 ${assignment.submissions.length}개의 풀이 이미지 삭제 시작...`);
-      
       for (const submission of assignment.submissions) {
         if (submission.solutionImages && Array.isArray(submission.solutionImages) && submission.solutionImages.length > 0) {
-          console.log(`[과제 삭제] 학생 ${submission.studentId}의 풀이 이미지 ${submission.solutionImages.length}개 삭제 중...`);
-          
           for (const solutionImageUrl of submission.solutionImages) {
             if (solutionImageUrl) {
               const urlInfo = extractPublicIdFromUrl(solutionImageUrl);
               if (urlInfo && urlInfo.publicId) {
-                // 풀이 이미지는 항상 image 타입
                 deletePromises.push(
-                  deleteFile(urlInfo.publicId, urlInfo.resourceType || 'image').catch(error => {
-                    // 개별 파일 삭제 실패는 로그만 남기고 계속 진행
-                    console.error(`[과제 삭제] 학생 풀이 이미지 삭제 실패 (public_id: ${urlInfo.publicId}):`, error.message);
-                    return null; // 에러를 throw하지 않고 null 반환
-                  })
+                  deleteFile(urlInfo.publicId, urlInfo.resourceType || 'image').catch(() => null)
                 );
-              } else {
-                console.warn(`[과제 삭제] 학생 풀이 이미지 URL에서 public_id를 추출할 수 없습니다: ${solutionImageUrl}`);
               }
             }
           }
@@ -650,11 +539,7 @@ const deleteAssignment = async (req, res) => {
 
     // 모든 파일 삭제 시도 (일부 실패해도 계속 진행)
     if (deletePromises.length > 0) {
-      console.log(`[과제 삭제] 총 ${deletePromises.length}개의 Cloudinary 파일 삭제 시도 중...`);
       await Promise.all(deletePromises);
-      console.log(`[과제 삭제] ${deletePromises.length}개의 Cloudinary 파일 삭제 시도 완료`);
-    } else {
-      console.log(`[과제 삭제] 삭제할 Cloudinary 파일이 없습니다.`);
     }
 
     // 과제 삭제
@@ -813,11 +698,18 @@ const submitAnswers = async (req, res) => {
     };
 
     if (existingSubmissionIndex >= 0) {
-      // 기존 제출 업데이트
-      assignment.submissions[existingSubmissionIndex] = submissionData;
+      // 기존 제출 업데이트 (timeSpentSeconds 보존)
+      const existingTimeSpent = assignment.submissions[existingSubmissionIndex].timeSpentSeconds || 0;
+      assignment.submissions[existingSubmissionIndex] = {
+        ...submissionData,
+        timeSpentSeconds: existingTimeSpent
+      };
     } else {
       // 새 제출 추가
-      assignment.submissions.push(submissionData);
+      assignment.submissions.push({
+        ...submissionData,
+        timeSpentSeconds: 0
+      });
     }
 
     await assignment.save();
@@ -846,12 +738,83 @@ const submitAnswers = async (req, res) => {
   }
 };
 
+// POST /api/assignments/:id/heartbeat - 체류 시간 업데이트
+const updateTimeSpent = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { seconds } = req.body;
+    const studentId = req.user._id;
+
+    if (!studentId) {
+      return res.status(401).json({
+        success: false,
+        message: '인증이 필요합니다'
+      });
+    }
+
+    if (!seconds || typeof seconds !== 'number' || seconds <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: '유효한 시간(초)을 입력해주세요'
+      });
+    }
+
+    const assignment = await Assignment.findById(id);
+    if (!assignment) {
+      return res.status(404).json({
+        success: false,
+        message: '과제를 찾을 수 없습니다'
+      });
+    }
+
+    const existingIndex = assignment.submissions.findIndex(
+      sub => sub.studentId.toString() === studentId.toString()
+    );
+
+    let totalSeconds = 0;
+
+    if (existingIndex >= 0) {
+      // 기존 submission이 있으면 시간 누적
+      assignment.submissions[existingIndex].timeSpentSeconds =
+        (assignment.submissions[existingIndex].timeSpentSeconds || 0) + seconds;
+      totalSeconds = assignment.submissions[existingIndex].timeSpentSeconds;
+    } else {
+      // 없으면 새 submission 생성 (체류 시간만 기록)
+      assignment.submissions.push({
+        studentId,
+        timeSpentSeconds: seconds,
+        studentAnswers: [],
+        correctCount: 0,
+        wrongCount: 0,
+        submittedAt: null,
+        solutionImages: []
+      });
+      totalSeconds = seconds;
+    }
+
+    await assignment.save();
+
+    res.json({
+      success: true,
+      totalSeconds
+    });
+  } catch (error) {
+    console.error('체류 시간 업데이트 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '체류 시간 업데이트 실패',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getAllAssignments,
   getAssignmentById,
   createAssignment,
   updateAssignment,
   deleteAssignment,
-  submitAnswers
+  submitAnswers,
+  updateTimeSpent
 };
 

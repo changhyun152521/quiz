@@ -128,8 +128,8 @@ function DashboardPage({ user, onLogout, onGoToMainPage, selectedCourse }) {
   // 통계 계산 - 제출 상태 기반
   const calculateStats = () => {
     const filtered = getFilteredAssignments();
-    
-    // 제출 상태 확인 함수
+
+    // 제출 상태 확인 함수 (submittedAt이 있어야 실제 제출)
     const isSubmitted = (assignment) => {
       const submission = assignment.submissions?.find(
         sub => {
@@ -138,7 +138,7 @@ function DashboardPage({ user, onLogout, onGoToMainPage, selectedCourse }) {
           return subStudentId && userId && String(subStudentId) === String(userId);
         }
       );
-      return !!submission;
+      return !!(submission && submission.submittedAt);
     };
     
     // 진행중인 과제: 제출전인 과제의 개수
@@ -355,7 +355,7 @@ function DashboardPage({ user, onLogout, onGoToMainPage, selectedCourse }) {
               <>
               <div className="assignments-grid">
                   {paginatedAssignments.map(assignment => {
-                  // 제출 상태 확인
+                  // 제출 상태 확인 (submittedAt이 있어야 실제 제출)
                   const submission = assignment.submissions?.find(
                     sub => {
                       const subStudentId = sub.studentId?._id || sub.studentId;
@@ -363,7 +363,7 @@ function DashboardPage({ user, onLogout, onGoToMainPage, selectedCourse }) {
                       return subStudentId && userId && String(subStudentId) === String(userId);
                     }
                   );
-                  const isSubmitted = !!submission;
+                  const isSubmitted = !!(submission && submission.submittedAt);
                   
                   // 제출 기간 확인
                   const now = new Date();

@@ -540,11 +540,24 @@ function TestResultModal({ showModal, onClose, course, allAssignments = [] }) {
   const formatDate = (dateString) => {
     if (!dateString) return '-';
     const date = new Date(dateString);
-    return date.toLocaleDateString('ko-KR', { 
-      year: 'numeric', 
-      month: '2-digit', 
-      day: '2-digit' 
+    return date.toLocaleDateString('ko-KR', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
     });
+  };
+
+  // 소요 시간 포맷팅 함수
+  const formatTimeSpent = (totalSeconds) => {
+    if (!totalSeconds || totalSeconds <= 0) return '-';
+
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    if (hours > 0) return `${hours}시간 ${minutes}분`;
+    if (minutes > 0) return `${minutes}분 ${seconds}초`;
+    return `${seconds}초`;
   };
 
   const fetchStudentResults = async () => {
@@ -584,11 +597,11 @@ function TestResultModal({ showModal, onClose, course, allAssignments = [] }) {
           results.push({
             studentId: studentId,
             studentName: studentName,
-            isSubmitted: !!submission,
             correctCount: submission?.correctCount || 0,
             wrongCount: submission?.wrongCount || 0,
             totalCount: assignment.questionCount || 0,
             submittedAt: submission?.submittedAt || null,
+            timeSpentSeconds: submission?.timeSpentSeconds || 0,
             isInCourse: true
           });
         });
@@ -611,11 +624,11 @@ function TestResultModal({ showModal, onClose, course, allAssignments = [] }) {
             results.push({
               studentId: subStudentId,
               studentName: studentName,
-              isSubmitted: true,
               correctCount: submission.correctCount || 0,
               wrongCount: submission.wrongCount || 0,
               totalCount: assignment.questionCount || 0,
               submittedAt: submission.submittedAt || null,
+              timeSpentSeconds: submission.timeSpentSeconds || 0,
               isInCourse: false // 강좌 미등록 표시
             });
           });
@@ -771,6 +784,7 @@ function TestResultModal({ showModal, onClose, course, allAssignments = [] }) {
                     <tr>
                       <th>학생명</th>
                       <th>제출 상태</th>
+                      <th>소요 시간</th>
                       <th>결과</th>
                       <th>풀이</th>
                     </tr>
@@ -778,7 +792,7 @@ function TestResultModal({ showModal, onClose, course, allAssignments = [] }) {
                   <tbody>
                     {studentResults.length === 0 ? (
                       <tr>
-                        <td colSpan="4" className="test-result-empty">
+                        <td colSpan="5" className="test-result-empty">
                           수강생이 없습니다.
                         </td>
                       </tr>
@@ -801,7 +815,7 @@ function TestResultModal({ showModal, onClose, course, allAssignments = [] }) {
                             )}
                           </td>
                           <td>
-                            {result.isSubmitted && result.submittedAt ? (
+                            {result.submittedAt ? (
                               <span className="test-result-submitted-date">
                                 {new Date(result.submittedAt).toLocaleDateString('ko-KR', {
                                   year: 'numeric',
@@ -818,7 +832,12 @@ function TestResultModal({ showModal, onClose, course, allAssignments = [] }) {
                             )}
                           </td>
                           <td>
-                            {result.isSubmitted ? (
+                            <span className="test-result-duration">
+                              {formatTimeSpent(result.timeSpentSeconds)}
+                            </span>
+                          </td>
+                          <td>
+                            {result.submittedAt ? (
                               <span className="test-result-score">
                                 {result.totalCount}개 중 {result.correctCount}개 맞음
                               </span>
@@ -830,7 +849,7 @@ function TestResultModal({ showModal, onClose, course, allAssignments = [] }) {
                             <button
                               className="view-solution-btn"
                               onClick={() => handleViewStudentSolution(result.studentId, result.studentName)}
-                              disabled={!result.isSubmitted}
+                              disabled={!result.submittedAt}
                             >
                               풀이 보기
                             </button>

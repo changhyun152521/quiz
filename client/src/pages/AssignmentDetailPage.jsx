@@ -56,6 +56,9 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
   const [solutionTouchStartZoom, setSolutionTouchStartZoom] = useState(1); // 해설지 터치 시작 줌 레벨
   const [isSolutionPinching, setIsSolutionPinching] = useState(false); // 해설지 핀치 줌 중 여부
 
+  // 체류 시간 추적용 ref (마지막 heartbeat 이후 경과 시간)
+  const lastHeartbeatTimeRef = useRef(Date.now());
+
   // 해설지 모달이 열릴 때 줌/팬 초기화
   useEffect(() => {
     if (showSolutionModal) {
@@ -132,6 +135,25 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'smooth' })
   }, [])
+
+  // 체류 시간 heartbeat (10초마다 서버에 전송)
+  useEffect(() => {
+    if (!user || !currentAssignment?._id || user.userType !== '학생' || isSubmitted) return;
+
+    const HEARTBEAT_INTERVAL = 10000; // 10초
+    lastHeartbeatTimeRef.current = Date.now();
+
+    const intervalId = setInterval(async () => {
+      try {
+        await post(`/api/assignments/${currentAssignment._id}/heartbeat`, { seconds: 10 });
+        lastHeartbeatTimeRef.current = Date.now();
+      } catch (error) {
+        console.error('체류 시간 기록 오류:', error);
+      }
+    }, HEARTBEAT_INTERVAL);
+
+    return () => clearInterval(intervalId);
+  }, [currentAssignment?._id, user, isSubmitted]);
 
   // 펜 색상 옵션 (5가지)
   const penColors = [
@@ -281,7 +303,7 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
         studentAnswers: submission?.studentAnswers
       });
       
-      if (submission) {
+      if (submission && submission.submittedAt) {
         setIsSubmitted(true);
         setSubmissionResult({
           correctCount: submission.correctCount || 0,
@@ -1531,8 +1553,18 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
 
     setIsSubmitting(true);
     try {
+      // 마지막 heartbeat 이후 경과한 시간 계산 후 전송 (제출 직전까지의 시간 기록)
+      const elapsedSinceLastHeartbeat = Math.floor((Date.now() - lastHeartbeatTimeRef.current) / 1000);
+      if (elapsedSinceLastHeartbeat > 0 && user?.userType === '학생') {
+        try {
+          await post(`/api/assignments/${assignment._id}/heartbeat`, { seconds: elapsedSinceLastHeartbeat });
+        } catch (heartbeatError) {
+          console.error('제출 전 체류 시간 기록 오류:', heartbeatError);
+        }
+      }
+
       const token = localStorage.getItem('token');
-      
+
       // 학생 답안 형식으로 변환
       const studentAnswers = answers.map(a => ({
         questionNumber: a.questionNumber,

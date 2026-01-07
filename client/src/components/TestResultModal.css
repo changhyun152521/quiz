@@ -308,6 +308,13 @@
   font-family: 'Pretendard', sans-serif;
 }
 
+.test-result-duration {
+  font-size: 14px;
+  font-weight: 500;
+  color: #059669;
+  font-family: 'Pretendard', sans-serif;
+}
+
 .test-result-no-score {
   color: #999;
 }

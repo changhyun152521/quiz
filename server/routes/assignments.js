@@ -6,7 +6,8 @@ const {
   createAssignment,
   updateAssignment,
   deleteAssignment,
-  submitAnswers
+  submitAnswers,
+  updateTimeSpent
 } = require('../controllers/assignmentsController');
 const { authenticate, authorize } = require('../middleware/auth');
 const { cleanupOldSolutions } = require('../jobs/cleanupOldSolutions');
@@ -34,7 +35,6 @@ router.get('/:id', async (req, res, next) => {
       };
     } catch (error) {
       // 토큰이 유효하지 않아도 계속 진행 (비회원으로 처리)
-      console.log('[getAssignmentById] 토큰 검증 실패, 비회원으로 처리:', error.message);
     }
   }
   next();
@@ -51,6 +51,9 @@ router.delete('/:id', deleteAssignment);
 
 // POST /api/assignments/:id/submit - 학생 답안 제출 및 채점
 router.post('/:id/submit', authenticate, submitAnswers);
+
+// POST /api/assignments/:id/heartbeat - 체류 시간 업데이트
+router.post('/:id/heartbeat', authenticate, updateTimeSpent);
 
 // POST /api/assignments/cleanup-old-solutions - 오래된 풀이 이미지 수동 삭제 (관리자/강사만)
 router.post('/cleanup-old-solutions', authenticate, authorize(['admin', 'teacher']), async (req, res) => {

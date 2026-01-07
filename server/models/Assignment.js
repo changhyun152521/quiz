@@ -172,6 +172,11 @@ const assignmentSchema = new mongoose.Schema({
       solutionImages: {
         type: [String],
         default: []
+      },
+      // 페이지 체류 시간 (초)
+      timeSpentSeconds: {
+        type: Number,
+        default: 0
       }
     }],
     default: []
