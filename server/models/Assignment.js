@@ -136,9 +136,10 @@ const assignmentSchema = new mongoose.Schema({
   // 학생 제출 답안 및 채점 결과
   submissions: {
     type: [{
-      // mathchang 사용자 _id (ref 없이 ObjectId만 저장)
+      // mathchang 사용자 _id (User 모델 참조)
       studentId: {
         type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
         required: true
       },
       studentAnswers: {

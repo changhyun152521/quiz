@@ -230,19 +230,10 @@ function TeacherDashboardPage({ user, onLogout, onGoToMainPage }) {
       const selectedTeacher = teacherList.find(t => t._id === formData.teacher);
       const teacherName = selectedTeacher?.name || '';
 
-      // 학생 이름 배열 생성
-      const studentNames = formData.students
-        .map(studentId => {
-          const student = students.find(s => s._id === studentId);
-          return student?.name || '';
-        })
-        .filter(name => name);
-
       // API에 보낼 데이터
       const courseData = {
         ...formData,
-        teacherName,
-        studentNames
+        teacherName
       };
 
       if (courseId) {

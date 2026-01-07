@@ -1,11 +1,63 @@
 // mathchang-quiz는 mathchang의 인증을 사용합니다.
-// 사용자 정보(이름 등)는 프론트엔드에서 전달받습니다.
 // 사용자 ID는 mathchang의 _id (문자열)를 사용합니다.
 
 const Course = require('../models/Course');
 const Assignment = require('../models/Assignment');
 
 const MATHCHANG_API_URL = process.env.MATHCHANG_API_URL || 'https://api.mathchang.com';
+
+// 학생 ID 배열로 학생 정보를 가져오는 헬퍼 함수
+const fetchStudentsByIds = async (studentIds, authHeader) => {
+  if (!studentIds || studentIds.length === 0) return [];
+
+  try {
+    const response = await fetch(`${MATHCHANG_API_URL}/api/users`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': authHeader || ''
+      }
+    });
+
+    const data = await response.json();
+    if (!response.ok) return [];
+
+    const users = data.data || data;
+    const studentIdStrings = studentIds.map(id => String(id));
+
+    // 학생 ID에 해당하는 사용자만 필터링하고 순서 유지
+    return studentIdStrings.map(id => {
+      const user = users.find(u => String(u._id) === id);
+      return user ? { _id: user._id, name: user.name, userId: user.userId } : { _id: id, name: '알 수 없음' };
+    });
+  } catch (error) {
+    console.error('학생 정보 조회 오류:', error);
+    return studentIds.map(id => ({ _id: String(id), name: '알 수 없음' }));
+  }
+};
+
+// 강좌에 학생 정보를 join하는 헬퍼 함수
+const populateStudents = async (courses, authHeader) => {
+  // 모든 강좌의 학생 ID를 수집 (중복 제거)
+  const allStudentIds = [...new Set(
+    courses.flatMap(course => (course.students || []).map(id => String(id)))
+  )];
+
+  if (allStudentIds.length === 0) return courses;
+
+  // 한 번에 모든 학생 정보 조회
+  const studentsInfo = await fetchStudentsByIds(allStudentIds, authHeader);
+  const studentMap = new Map(studentsInfo.map(s => [String(s._id), s]));
+
+  // 각 강좌의 students를 학생 정보로 교체
+  return courses.map(course => {
+    const courseObj = course.toObject ? course.toObject() : { ...course };
+    courseObj.students = (course.students || []).map(id =>
+      studentMap.get(String(id)) || { _id: String(id), name: '알 수 없음' }
+    );
+    return courseObj;
+  });
+};
 
 // GET /api/courses - 모든 강좌 조회 (페이지네이션 지원)
 // studentId 쿼리 파라미터가 있으면 해당 학생이 등록된 강좌만 반환
@@ -22,8 +74,6 @@ const getAllCourses = async (req, res) => {
       filter.students = studentId;  // 해당 학생이 등록된 강좌만 필터링
     }
 
-    // teacher, students는 문자열 ID로 저장됨 (populate 불필요)
-    // teacherName, studentNames에 이름 저장됨
     const courses = await Course.find(filter)
       .populate({
         path: 'assignments',
@@ -35,9 +85,12 @@ const getAllCourses = async (req, res) => {
 
     const total = await Course.countDocuments(filter);
 
+    // 학생 정보 join
+    const coursesWithStudents = await populateStudents(courses, req.headers.authorization);
+
     res.json({
       success: true,
-      data: courses,
+      data: coursesWithStudents,
       pagination: {
         page,
         limit,
@@ -67,9 +120,12 @@ const getCourseById = async (req, res) => {
       });
     }
 
+    // 학생 정보 join
+    const [courseWithStudents] = await populateStudents([course], req.headers.authorization);
+
     res.json({
       success: true,
-      data: course
+      data: courseWithStudents
     });
   } catch (error) {
     res.status(500).json({
@@ -81,10 +137,10 @@ const getCourseById = async (req, res) => {
 };
 
 // POST /api/courses - 새 강좌 생성
-// 프론트엔드에서 teacher(ID), teacherName, students(ID배열), studentNames(이름배열)를 전달받음
+// 프론트엔드에서 teacher(ID), teacherName, students(ID배열)를 전달받음
 const createCourse = async (req, res) => {
   try {
-    const { courseName, teacher, teacherName, students = [], studentNames = [], assignments = [] } = req.body;
+    const { courseName, teacher, teacherName, students = [], assignments = [] } = req.body;
 
     // 필수 필드 검증
     if (!courseName || !teacher || !teacherName) {
@@ -115,7 +171,6 @@ const createCourse = async (req, res) => {
       teacher,
       teacherName,
       students: Array.isArray(students) ? students : [],
-      studentNames: Array.isArray(studentNames) ? studentNames : [],
       assignments: assignmentIds
     });
 
@@ -147,10 +202,10 @@ const createCourse = async (req, res) => {
 };
 
 // PUT /api/courses/:id - 강좌 정보 수정
-// 프론트엔드에서 teacher(ID), teacherName, students(ID배열), studentNames(이름배열)를 전달받음
+// 프론트엔드에서 teacher(ID), teacherName, students(ID배열)를 전달받음
 const updateCourse = async (req, res) => {
   try {
-    const { courseName, teacher, teacherName, students, studentNames, assignments } = req.body;
+    const { courseName, teacher, teacherName, students, assignments } = req.body;
 
     // 강좌 찾기
     const course = await Course.findById(req.params.id);
@@ -186,10 +241,9 @@ const updateCourse = async (req, res) => {
       updateData.teacherName = teacherName;
     }
 
-    // 학생 수정 (ID배열과 이름배열 함께 전달받음)
-    if (students !== undefined && studentNames !== undefined) {
+    // 학생 수정 (ID배열만 전달받음)
+    if (students !== undefined) {
       updateData.students = Array.isArray(students) ? students : [];
-      updateData.studentNames = Array.isArray(studentNames) ? studentNames : [];
     }
 
     // 과제 수정
@@ -278,15 +332,15 @@ const deleteCourse = async (req, res) => {
 };
 
 // POST /api/courses/:id/students - 학생 등록
-// 프론트엔드에서 studentId와 studentName을 함께 전달받음
+// 프론트엔드에서 studentId만 전달받음
 const addStudentToCourse = async (req, res) => {
   try {
-    const { studentId, studentName } = req.body;
+    const { studentId } = req.body;
 
-    if (!studentId || !studentName) {
+    if (!studentId) {
       return res.status(400).json({
         success: false,
-        message: '학생 ID와 이름은 필수입니다'
+        message: '학생 ID는 필수입니다'
       });
     }
 
@@ -309,7 +363,6 @@ const addStudentToCourse = async (req, res) => {
 
     // 학생 추가
     course.students.push(studentId);
-    course.studentNames.push(studentName);
 
     const updatedCourse = await course.save();
 
@@ -352,7 +405,6 @@ const removeStudentFromCourse = async (req, res) => {
 
     // 학생 제거
     course.students.splice(studentIndex, 1);
-    course.studentNames.splice(studentIndex, 1);
 
     const updatedCourse = await course.save();
 
@@ -464,9 +516,12 @@ const getCoursesByStudent = async (req, res) => {
       })
       .sort({ createdAt: -1 });
 
+    // 학생 정보 join
+    const coursesWithStudents = await populateStudents(courses, req.headers.authorization);
+
     res.json({
       success: true,
-      data: courses
+      data: coursesWithStudents
     });
   } catch (error) {
     res.status(500).json({

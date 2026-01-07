@@ -552,11 +552,9 @@ function TestResultModal({ showModal, onClose, course, allAssignments = [] }) {
 
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      
       // 과제 ID 추출
       const assignmentId = selectedAssignment._id || selectedAssignment;
-      
+
       const response = await get(`/api/assignments/${assignmentId}`);
 
       const data = await response.json();
@@ -564,15 +562,19 @@ function TestResultModal({ showModal, onClose, course, allAssignments = [] }) {
         const assignment = data.data;
         const results = [];
 
-        // 강좌의 모든 학생에 대해 결과 확인
-        // course.students가 populate되었는지 확인
+        // 강좌의 모든 학생에 대해 결과 확인 (백엔드에서 학생 정보가 join되어 옴)
         const students = course.students || [];
-        const studentNames = course.studentNames || [];
-        
-        students.forEach((student, index) => {
+
+        // 강좌에 등록된 학생 ID Set (중복 체크용)
+        const courseStudentIds = new Set(
+          students.map(student => String(student._id || student))
+        );
+
+        // 1. 강좌에 등록된 학생들 처리
+        students.forEach((student) => {
           const studentId = student._id || student;
-          const studentName = student.name || studentNames[index] || '알 수 없음';
-          
+          const studentName = student.name || '알 수 없음';
+
           // 해당 학생의 제출 정보 찾기
           const submission = assignment.submissions?.find(sub => {
             const subStudentId = sub.studentId?._id || sub.studentId;
@@ -586,9 +588,38 @@ function TestResultModal({ showModal, onClose, course, allAssignments = [] }) {
             correctCount: submission?.correctCount || 0,
             wrongCount: submission?.wrongCount || 0,
             totalCount: assignment.questionCount || 0,
-            submittedAt: submission?.submittedAt || null
+            submittedAt: submission?.submittedAt || null,
+            isInCourse: true
           });
         });
+
+        // 2. 강좌에 등록되지 않았지만 제출한 학생들 처리
+        if (assignment.submissions && assignment.submissions.length > 0) {
+          assignment.submissions.forEach(submission => {
+            const subStudentId = submission.studentId?._id || submission.studentId;
+
+            // 이미 강좌에 등록된 학생이면 스킵
+            if (courseStudentIds.has(String(subStudentId))) {
+              return;
+            }
+
+            // populate된 경우 studentId.name 사용, 아니면 userId 사용
+            const studentName = submission.studentId?.name ||
+                               submission.studentId?.userId ||
+                               '알 수 없음';
+
+            results.push({
+              studentId: subStudentId,
+              studentName: studentName,
+              isSubmitted: true,
+              correctCount: submission.correctCount || 0,
+              wrongCount: submission.wrongCount || 0,
+              totalCount: assignment.questionCount || 0,
+              submittedAt: submission.submittedAt || null,
+              isInCourse: false // 강좌 미등록 표시
+            });
+          });
+        }
 
         setStudentResults(results);
       }
@@ -754,7 +785,21 @@ function TestResultModal({ showModal, onClose, course, allAssignments = [] }) {
                     ) : (
                       studentResults.map((result) => (
                         <tr key={result.studentId}>
-                          <td>{result.studentName}</td>
+                          <td>
+                            {result.studentName}
+                            {!result.isInCourse && (
+                              <span style={{
+                                marginLeft: '6px',
+                                fontSize: '11px',
+                                color: '#f59e0b',
+                                backgroundColor: '#fef3c7',
+                                padding: '2px 6px',
+                                borderRadius: '4px'
+                              }}>
+                                미등록
+                              </span>
+                            )}
+                          </td>
                           <td>
                             {result.isSubmitted && result.submittedAt ? (
                               <span className="test-result-submitted-date">

@@ -31,11 +31,6 @@ const courseSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId
   }],
 
-  // 학생 이름 배열 (표시용 - 비정규화)
-  studentNames: [{
-    type: String
-  }],
-
   // 등록된 과제들 (Assignment 모델 참조 배열)
   assignments: [{
     type: mongoose.Schema.Types.ObjectId,

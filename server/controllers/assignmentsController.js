@@ -1,4 +1,5 @@
 const Assignment = require('../models/Assignment');
+const User = require('../models/User');
 const { deleteFile, cloudinary } = require('../utils/cloudinary');
 
 // GET /api/assignments - 모든 과제 조회 (페이지네이션 지원)
@@ -35,10 +36,11 @@ const getAllAssignments = async (req, res) => {
 };
 
 // GET /api/assignments/:id - 특정 과제 조회
-// studentId는 mathchang 사용자 ID(문자열)로 저장됨 (populate 불필요)
+// submissions.studentId를 User 모델과 populate하여 학생 이름 포함
 const getAssignmentById = async (req, res) => {
   try {
-    const assignment = await Assignment.findById(req.params.id);
+    const assignment = await Assignment.findById(req.params.id)
+      .populate('submissions.studentId', 'name userId');
 
     if (!assignment) {
       return res.status(404).json({
