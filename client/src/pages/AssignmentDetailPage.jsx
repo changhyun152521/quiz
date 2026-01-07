@@ -136,16 +136,16 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
     window.scrollTo({ top: 0, left: 0, behavior: 'smooth' })
   }, [])
 
-  // 체류 시간 heartbeat (10초마다 서버에 전송)
+  // 체류 시간 heartbeat (5초마다 서버에 전송)
   useEffect(() => {
     if (!user || !currentAssignment?._id || user.userType !== '학생' || isSubmitted) return;
 
-    const HEARTBEAT_INTERVAL = 10000; // 10초
+    const HEARTBEAT_INTERVAL = 5000; // 5초
     lastHeartbeatTimeRef.current = Date.now();
 
     const intervalId = setInterval(async () => {
       try {
-        await post(`/api/assignments/${currentAssignment._id}/heartbeat`, { seconds: 10 });
+        await post(`/api/assignments/${currentAssignment._id}/heartbeat`, { seconds: 5 });
         lastHeartbeatTimeRef.current = Date.now();
       } catch (error) {
         console.error('체류 시간 기록 오류:', error);
