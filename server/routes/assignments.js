@@ -7,10 +7,11 @@ const {
   updateAssignment,
   deleteAssignment,
   submitAnswers,
-  updateTimeSpent
+  updateTimeSpent,
+  saveDraft,
+  getDraft
 } = require('../controllers/assignmentsController');
 const { authenticate, authorize } = require('../middleware/auth');
-const { cleanupOldSolutions } = require('../jobs/cleanupOldSolutions');
 
 // GET /api/assignments - 모든 과제 조회 (페이지네이션 지원)
 router.get('/', getAllAssignments);
@@ -55,22 +56,11 @@ router.post('/:id/submit', authenticate, submitAnswers);
 // POST /api/assignments/:id/heartbeat - 체류 시간 업데이트
 router.post('/:id/heartbeat', authenticate, updateTimeSpent);
 
-// POST /api/assignments/cleanup-old-solutions - 오래된 풀이 이미지 수동 삭제 (관리자/강사만)
-router.post('/cleanup-old-solutions', authenticate, authorize(['admin', 'teacher']), async (req, res) => {
-  try {
-    await cleanupOldSolutions();
-    res.json({
-      success: true,
-      message: '오래된 풀이 이미지 삭제 작업이 완료되었습니다.'
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: '삭제 작업 중 오류가 발생했습니다.',
-      error: error.message
-    });
-  }
-});
+// POST /api/assignments/:id/save-draft - 풀이 임시저장
+router.post('/:id/save-draft', authenticate, saveDraft);
+
+// GET /api/assignments/:id/draft - 임시저장된 풀이 조회
+router.get('/:id/draft', authenticate, getDraft);
 
 module.exports = router;
 

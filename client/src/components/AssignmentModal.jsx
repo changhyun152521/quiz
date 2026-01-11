@@ -123,6 +123,9 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
   const [currentUploadType, setCurrentUploadType] = useState(null); // 'question' 또는 'solution'
   const currentUploadTypeRef = useRef(null); // 위젯 콜백에서 참조할 수 있는 ref
   const currentFormIdRef = useRef(null); // 현재 파일 업로드 중인 폼 ID
+  const [useServerUpload, setUseServerUpload] = useState(false); // R2 사용 시 서버 업로드
+  const [isUploading, setIsUploading] = useState(false); // 업로드 중 상태
+  const fileInputRef = useRef(null); // 서버 업로드용 파일 input ref
   
   // 각 폼별 대단원/소단원 목록
   const [formMainUnits, setFormMainUnits] = useState([[]]);
@@ -175,31 +178,39 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
       });
     };
 
-    // 서버에서 Cloudinary 설정 가져오기
-    const initializeCloudinary = async () => {
+    // 서버에서 업로드 설정 가져오기 (R2 또는 Cloudinary)
+    const initializeUploader = async () => {
       try {
-        // Cloudinary 스크립트 로드
-        await loadCloudinaryScript();
+        // 서버에서 업로드 설정 가져오기
+        const configResponse = await get('/api/upload/config');
 
-        // 서버에서 Cloudinary 설정 가져오기
-        const configResponse = await get('/api/cloudinary/config');
-        
         if (!configResponse.ok) {
           const errorData = await configResponse.json().catch(() => ({ message: '서버 오류가 발생했습니다' }));
-          throw new Error(errorData.message || `서버 오류 (${configResponse.status}): Cloudinary 설정을 가져올 수 없습니다.`);
+          throw new Error(errorData.message || `서버 오류 (${configResponse.status}): 업로드 설정을 가져올 수 없습니다.`);
         }
-        
+
         const configData = await configResponse.json();
 
         if (!configData.success || !configData.data) {
-          throw new Error(configData.message || 'Cloudinary 설정을 가져올 수 없습니다. 서버의 .env 파일을 확인하세요.');
+          throw new Error(configData.message || '업로드 설정을 가져올 수 없습니다.');
         }
 
-        const { cloudName, uploadPreset, apiKey } = configData.data;
+        const { cloudName, uploadPreset, apiKey, useServerUpload: serverUploadMode } = configData.data;
 
+        // R2 서버 업로드 모드인 경우
+        if (serverUploadMode) {
+          console.log('[업로드] R2 서버 업로드 모드 활성화');
+          setUseServerUpload(true);
+          return; // Cloudinary 위젯 초기화 건너뛰기
+        }
+
+        // Cloudinary 모드
         if (!cloudName || cloudName === 'dummy') {
-          throw new Error('Cloudinary cloud name이 설정되지 않았습니다. 서버의 .env 파일에 CLOUDINARY_CLOUD_NAME을 설정하세요.');
+          throw new Error('Cloudinary cloud name이 설정되지 않았습니다.');
         }
+
+        // Cloudinary 스크립트 로드
+        await loadCloudinaryScript();
 
         // Cloudinary 위젯 생성
         if (window.cloudinary) {
@@ -225,7 +236,7 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
             
             widgetConfig.uploadSignature = async (callback, paramsToSign) => {
               try {
-                const response = await post('/api/cloudinary/signature', paramsToSign);
+                const response = await post('/api/upload/signature', paramsToSign);
                 const data = await response.json();
                 if (data.signature) {
                   callback(data.signature);
@@ -443,12 +454,13 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
           setCloudinaryWidget(widget);
         }
       } catch (error) {
-        console.error('Cloudinary 초기화 오류:', error);
-        alert('Cloudinary 설정 오류: ' + error.message);
+        console.error('업로드 초기화 오류:', error);
+        // R2 모드에서는 에러가 아닐 수 있으므로 조용히 로그만
+        console.warn('업로드 설정 경고: ' + error.message);
       }
     };
 
-    initializeCloudinary();
+    initializeUploader();
 
     return () => {
       if (widgetInstance) {
@@ -456,6 +468,165 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
       }
     };
   }, []);
+
+  // R2 Presigned URL 업로드 핸들러
+  const handleServerUpload = async (files) => {
+    if (!files || files.length === 0) return;
+
+    setIsUploading(true);
+
+    try {
+      for (const file of files) {
+        // 파일 유효성 검사
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
+        if (!allowedTypes.includes(file.type)) {
+          alert(`지원하지 않는 파일 형식입니다: ${file.name}`);
+          continue;
+        }
+
+        if (file.size > 50 * 1024 * 1024) {
+          alert(`파일 크기가 너무 큽니다 (최대 50MB): ${file.name}`);
+          continue;
+        }
+
+        // 1. 서버에서 presigned URL 받기
+        const params = new URLSearchParams({
+          filename: file.name,
+          contentType: file.type,
+          folder: 'assignments'
+        });
+
+        const presignedResponse = await get(`/api/upload/presigned-url?${params}`);
+
+        if (!presignedResponse.ok) {
+          const errorData = await presignedResponse.json().catch(() => ({}));
+          throw new Error(errorData.message || 'Presigned URL 생성 실패');
+        }
+
+        const presignedData = await presignedResponse.json();
+        if (!presignedData.success) {
+          throw new Error(presignedData.message || 'Presigned URL 생성 실패');
+        }
+
+        const { uploadUrl, publicUrl } = presignedData.data;
+
+        // 2. Presigned URL로 R2에 직접 업로드
+        const uploadResponse = await fetch(uploadUrl, {
+          method: 'PUT',
+          body: file,
+          headers: {
+            'Content-Type': file.type
+          }
+        });
+
+        if (!uploadResponse.ok) {
+          throw new Error('R2 업로드 실패');
+        }
+
+        // 파일 타입 판단
+        const ext = file.name.split('.').pop()?.toLowerCase();
+        let fileType = 'pdf';
+        if (file.type.startsWith('image/') || ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'].includes(ext)) {
+          fileType = 'image';
+        }
+
+        const fileInfo = {
+          url: publicUrl,
+          type: fileType,
+          name: file.name,
+          order: Date.now()
+        };
+
+        // 업로드 결과 처리 (기존 Cloudinary 콜백과 동일한 방식)
+        const uploadType = currentUploadTypeRef.current;
+        const formId = currentFormIdRef.current;
+
+        console.log('서버 업로드 완료:', { fileInfo, uploadType, formId });
+
+        // 여러 폼 모드인 경우
+        if (formId !== null && formId !== undefined) {
+          if (uploadType === 'question') {
+            setMultipleForms(prev => prev.map(form => {
+              if (form.id === formId) {
+                return {
+                  ...form,
+                  questionFileUrl: [...(form.questionFileUrl || []), fileInfo.url],
+                  questionFileType: [...(form.questionFileType || []), fileInfo.type],
+                  previewQuestionFiles: [
+                    ...(form.previewQuestionFiles || []),
+                    fileInfo
+                  ].sort((a, b) => (a.order || 0) - (b.order || 0))
+                };
+              }
+              return form;
+            }));
+          } else if (uploadType === 'solution') {
+            setMultipleForms(prev => prev.map(form => {
+              if (form.id === formId) {
+                return {
+                  ...form,
+                  solutionFileUrl: [...(form.solutionFileUrl || []), fileInfo.url],
+                  solutionFileType: [...(form.solutionFileType || []), fileInfo.type],
+                  previewSolutionFiles: [
+                    ...(form.previewSolutionFiles || []),
+                    fileInfo
+                  ].sort((a, b) => (a.order || 0) - (b.order || 0))
+                };
+              }
+              return form;
+            }));
+          }
+        } else {
+          // 단일 폼 모드 (수정 모드)
+          if (uploadType === 'question') {
+            setFormData(prev => ({
+              ...prev,
+              questionFileUrl: [...(prev.questionFileUrl || []), fileInfo.url],
+              questionFileType: [...(prev.questionFileType || []), fileInfo.type]
+            }));
+            setPreviewQuestionFiles(prev => [...prev, fileInfo].sort((a, b) => (a.order || 0) - (b.order || 0)));
+          } else if (uploadType === 'solution') {
+            setFormData(prev => ({
+              ...prev,
+              solutionFileUrl: [...(prev.solutionFileUrl || []), fileInfo.url],
+              solutionFileType: [...(prev.solutionFileType || []), fileInfo.type]
+            }));
+            setPreviewSolutionFiles(prev => [...prev, fileInfo].sort((a, b) => (a.order || 0) - (b.order || 0)));
+          }
+        }
+      }
+    } catch (err) {
+      console.error('파일 업로드 오류:', err);
+      alert(`파일 업로드 실패: ${err.message}`);
+    } finally {
+      setIsUploading(false);
+      // input 초기화
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  // 파일 업로드 버튼 클릭 핸들러 (R2/Cloudinary 분기)
+  const handleUploadClick = (uploadType, formId = null) => {
+    currentUploadTypeRef.current = uploadType;
+    currentFormIdRef.current = formId;
+    setCurrentUploadType(uploadType);
+
+    if (useServerUpload) {
+      // R2 서버 업로드 모드 - 파일 input 열기
+      if (fileInputRef.current) {
+        fileInputRef.current.click();
+      }
+    } else {
+      // Cloudinary 모드 - 위젯 열기
+      if (cloudinaryWidget) {
+        cloudinaryWidget.open();
+      } else {
+        alert('파일 업로드가 준비되지 않았습니다. 페이지를 새로고침해주세요.');
+      }
+    }
+  };
 
   // questionCount가 변경될 때 answers 배열 동적 생성
   useEffect(() => {
@@ -902,6 +1073,16 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
         onClose();
       }
     }}>
+      {/* R2 서버 업로드용 숨겨진 파일 input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*,.pdf"
+        multiple
+        style={{ display: 'none' }}
+        onChange={(e) => handleServerUpload(e.target.files)}
+      />
+
       <div className="assignment-modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="assignment-modal-header">
           <h2 className="assignment-modal-title">
@@ -922,11 +1103,9 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
             setIsSubmitting={setIsSubmitting}
             subjectUnits={subjectUnits}
             subjects={subjects}
-            cloudinaryWidget={cloudinaryWidget}
-            currentUploadTypeRef={currentUploadTypeRef}
-            currentFormIdRef={currentFormIdRef}
-            setCurrentUploadType={setCurrentUploadType}
             setMultipleForms={setMultipleForms}
+            handleUploadClick={handleUploadClick}
+            isUploading={isUploading}
           />
         ) : (
           <form onSubmit={handleSubmit} className="assignment-modal-form">
@@ -1062,18 +1241,10 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
               <button
                 type="button"
                 className="upload-btn"
-                onClick={() => {
-                  if (cloudinaryWidget) {
-                    console.log('문제지 파일 선택 버튼 클릭');
-                    currentUploadTypeRef.current = 'question';
-                    setCurrentUploadType('question');
-                    cloudinaryWidget.open();
-                  } else {
-                    alert('Cloudinary 위젯이 로드되지 않았습니다. 페이지를 새로고침해주세요.');
-                  }
-                }}
+                disabled={isUploading}
+                onClick={() => handleUploadClick('question', null)}
               >
-                문제지 파일 선택
+                {isUploading ? '업로드 중...' : '문제지 파일 선택'}
               </button>
               {previewQuestionFiles.length > 0 && (
                 <button
@@ -1292,18 +1463,10 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
               <button
                 type="button"
                 className="upload-btn"
-                onClick={() => {
-                  if (cloudinaryWidget) {
-                    console.log('해설지 파일 선택 버튼 클릭');
-                    currentUploadTypeRef.current = 'solution';
-                    setCurrentUploadType('solution');
-                    cloudinaryWidget.open();
-                  } else {
-                    alert('Cloudinary 위젯이 로드되지 않았습니다. 페이지를 새로고침해주세요.');
-                  }
-                }}
+                disabled={isUploading}
+                onClick={() => handleUploadClick('solution', null)}
               >
-                해설지 파일 선택
+                {isUploading ? '업로드 중...' : '해설지 파일 선택'}
               </button>
               {previewSolutionFiles.length > 0 && (
                 <button
@@ -1581,22 +1744,20 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
 }
 
 // 여러 과제 추가를 위한 컴포넌트
-function MultipleAssignmentForm({ 
-  forms, 
-  setForms, 
-  nextFormId, 
-  setNextFormId, 
-  onSave, 
-  onClose, 
-  isSubmitting, 
+function MultipleAssignmentForm({
+  forms,
+  setForms,
+  nextFormId,
+  setNextFormId,
+  onSave,
+  onClose,
+  isSubmitting,
   setIsSubmitting,
   subjectUnits,
   subjects,
-  cloudinaryWidget,
-  currentUploadTypeRef,
-  currentFormIdRef,
-  setCurrentUploadType,
-  setMultipleForms
+  setMultipleForms,
+  handleUploadClick,
+  isUploading
 }) {
   const [errors, setErrors] = useState({});
 
@@ -1889,17 +2050,13 @@ function MultipleAssignmentForm({
             
             <SingleAssignmentForm
               form={form}
-              formIndex={index}
               onChange={handleFormChange}
               onAnswerChange={handleAnswerChange}
               errors={errors[form.id] || {}}
-              subjectUnits={subjectUnits}
               subjects={subjects}
-              cloudinaryWidget={cloudinaryWidget}
-              currentUploadTypeRef={currentUploadTypeRef}
-              currentFormIdRef={currentFormIdRef}
-              setCurrentUploadType={setCurrentUploadType}
               setForms={setMultipleForms}
+              handleUploadClick={handleUploadClick}
+              isUploading={isUploading}
             />
           </div>
         ))}
@@ -1929,19 +2086,15 @@ function MultipleAssignmentForm({
 }
 
 // 단일 과제 폼 컴포넌트
-function SingleAssignmentForm({ 
-  form, 
-  formIndex, 
-  onChange, 
-  onAnswerChange, 
-  errors, 
-  subjectUnits, 
+function SingleAssignmentForm({
+  form,
+  onChange,
+  onAnswerChange,
+  errors,
   subjects,
-  cloudinaryWidget,
-  currentUploadTypeRef,
-  currentFormIdRef,
-  setCurrentUploadType,
-  setForms
+  setForms,
+  handleUploadClick,
+  isUploading
 }) {
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -2082,19 +2235,10 @@ function SingleAssignmentForm({
           <button
             type="button"
             className="upload-btn"
-            onClick={() => {
-              if (cloudinaryWidget) {
-                console.log('문제지 파일 선택 버튼 클릭 (여러 폼 모드):', form.id);
-                currentUploadTypeRef.current = 'question';
-                currentFormIdRef.current = form.id;
-                setCurrentUploadType('question');
-                cloudinaryWidget.open();
-              } else {
-                alert('Cloudinary 위젯이 로드되지 않았습니다. 페이지를 새로고침해주세요.');
-              }
-            }}
+            disabled={isUploading}
+            onClick={() => handleUploadClick('question', form.id)}
           >
-            문제지 파일 선택
+            {isUploading ? '업로드 중...' : '문제지 파일 선택'}
           </button>
           {(form.previewQuestionFiles || []).length > 0 && (
             <button
@@ -2245,19 +2389,10 @@ function SingleAssignmentForm({
           <button
             type="button"
             className="upload-btn"
-            onClick={() => {
-              if (cloudinaryWidget) {
-                console.log('해설지 파일 선택 버튼 클릭 (여러 폼 모드):', form.id);
-                currentUploadTypeRef.current = 'solution';
-                currentFormIdRef.current = form.id;
-                setCurrentUploadType('solution');
-                cloudinaryWidget.open();
-              } else {
-                alert('Cloudinary 위젯이 로드되지 않았습니다. 페이지를 새로고침해주세요.');
-              }
-            }}
+            disabled={isUploading}
+            onClick={() => handleUploadClick('solution', form.id)}
           >
-            해설지 파일 선택
+            {isUploading ? '업로드 중...' : '해설지 파일 선택'}
           </button>
           {(form.previewSolutionFiles || []).length > 0 && (
             <button

@@ -3,6 +3,31 @@
 
 const mongoose = require('mongoose');
 
+// 스트로크 포인트 스키마 (x, y 좌표)
+const PointSchema = new mongoose.Schema({
+  x: { type: Number, required: true },
+  y: { type: Number, required: true }
+}, { _id: false });
+
+// 개별 스트로크 스키마
+const StrokeSchema = new mongoose.Schema({
+  id: { type: String, required: true },
+  type: { type: String, enum: ['pen', 'eraser'], required: true },
+  color: { type: String },  // eraser일 경우 null
+  width: { type: Number, required: true },
+  points: [PointSchema]
+}, { _id: false });
+
+// 페이지별 스트로크 데이터 스키마
+const PageStrokesSchema = new mongoose.Schema({
+  imageIndex: { type: Number, required: true },
+  canvasSize: {
+    width: { type: Number, default: 2100 },
+    height: { type: Number, default: 2970 }
+  },
+  strokes: [StrokeSchema]
+}, { _id: false });
+
 const assignmentSchema = new mongoose.Schema({
   // 과제명
   assignmentName: {
@@ -168,9 +193,14 @@ const assignmentSchema = new mongoose.Schema({
         type: Date,
         default: Date.now
       },
-      // 학생 풀이 이미지 URL 배열 (Cloudinary)
+      // 학생 풀이 이미지 URL 배열 (Cloudinary/R2) - 기존 방식, 하위 호환용
       solutionImages: {
         type: [String],
+        default: []
+      },
+      // 학생 풀이 스트로크 데이터 - 새 방식 (MongoDB 직접 저장)
+      strokeData: {
+        type: [PageStrokesSchema],
         default: []
       },
       // 페이지 체류 시간 (초)

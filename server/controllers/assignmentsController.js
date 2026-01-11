@@ -1,6 +1,6 @@
 const Assignment = require('../models/Assignment');
 const getUser = require('../models/User');
-const { deleteFile, cloudinary } = require('../utils/cloudinary');
+const { deleteFileByUrl } = require('../utils/fileService');
 
 // GET /api/assignments - 모든 과제 조회 (페이지네이션 지원)
 const getAllAssignments = async (req, res) => {
@@ -485,7 +485,7 @@ const extractPublicIdFromUrl = (url) => {
 // DELETE /api/assignments/:id - 과제 삭제
 const deleteAssignment = async (req, res) => {
   try {
-    // 삭제 전에 과제 정보 가져오기 (Cloudinary 파일 삭제를 위해)
+    // 삭제 전에 과제 정보 가져오기 (파일 삭제를 위해)
     const assignment = await Assignment.findById(req.params.id);
 
     if (!assignment) {
@@ -499,39 +499,42 @@ const deleteAssignment = async (req, res) => {
 
     // 1. 과제의 원본 파일(문제지) 삭제
     const fileUrls = Array.isArray(assignment.fileUrl) ? assignment.fileUrl : (assignment.fileUrl ? [assignment.fileUrl] : []);
-    const fileTypes = Array.isArray(assignment.fileType) ? assignment.fileType : (assignment.fileType ? [assignment.fileType] : []);
+    for (const fileUrl of fileUrls) {
+      deletePromises.push(deleteFileByUrl(fileUrl).catch((err) => {
+        console.error('파일 삭제 실패:', err.message);
+        return null;
+      }));
+    }
 
-    for (let i = 0; i < fileUrls.length; i++) {
-      const fileUrl = fileUrls[i];
-      const fileType = fileTypes[i] || 'image'; // 기본값은 image
-      
-      if (fileUrl) {
-        const urlInfo = extractPublicIdFromUrl(fileUrl);
-        if (urlInfo && urlInfo.publicId) {
-          // fileType에 따라 resource_type 결정
-          const resourceType = fileType === 'pdf' ? 'raw' : 'image';
-          
-          // Cloudinary에서 파일 삭제
-          deletePromises.push(
-            deleteFile(urlInfo.publicId, resourceType).catch(() => null)
-          );
-        }
+    // 2. questionFileUrl 삭제
+    if (assignment.questionFileUrl && Array.isArray(assignment.questionFileUrl)) {
+      for (const fileUrl of assignment.questionFileUrl) {
+        deletePromises.push(deleteFileByUrl(fileUrl).catch((err) => {
+          console.error('문제지 파일 삭제 실패:', err.message);
+          return null;
+        }));
       }
     }
 
-    // 2. 모든 학생 풀이 이미지 삭제
+    // 3. solutionFileUrl (해설지) 삭제
+    if (assignment.solutionFileUrl && Array.isArray(assignment.solutionFileUrl)) {
+      for (const fileUrl of assignment.solutionFileUrl) {
+        deletePromises.push(deleteFileByUrl(fileUrl).catch((err) => {
+          console.error('해설지 파일 삭제 실패:', err.message);
+          return null;
+        }));
+      }
+    }
+
+    // 4. 모든 학생 풀이 이미지 삭제
     if (assignment.submissions && Array.isArray(assignment.submissions) && assignment.submissions.length > 0) {
       for (const submission of assignment.submissions) {
         if (submission.solutionImages && Array.isArray(submission.solutionImages) && submission.solutionImages.length > 0) {
           for (const solutionImageUrl of submission.solutionImages) {
-            if (solutionImageUrl) {
-              const urlInfo = extractPublicIdFromUrl(solutionImageUrl);
-              if (urlInfo && urlInfo.publicId) {
-                deletePromises.push(
-                  deleteFile(urlInfo.publicId, urlInfo.resourceType || 'image').catch(() => null)
-                );
-              }
-            }
+            deletePromises.push(deleteFileByUrl(solutionImageUrl).catch((err) => {
+              console.error('풀이 이미지 삭제 실패:', err.message);
+              return null;
+            }));
           }
         }
       }
@@ -563,7 +566,7 @@ const deleteAssignment = async (req, res) => {
 const submitAnswers = async (req, res) => {
   try {
     const { id } = req.params;
-    const { studentAnswers, solutionImages } = req.body; // solutionImages: base64 이미지 배열
+    const { studentAnswers, strokeData } = req.body; // strokeData: 스트로크 데이터 배열
     const studentId = req.user._id; // 인증된 사용자 ID
 
     if (!studentId) {
@@ -626,66 +629,37 @@ const submitAnswers = async (req, res) => {
       sub => sub.studentId.toString() === studentId.toString()
     );
 
-    // 풀이 이미지를 Cloudinary에 업로드
-    let solutionImageUrls = [];
-    if (solutionImages && Array.isArray(solutionImages) && solutionImages.length > 0) {
-      console.log(`풀이 이미지 업로드 시작: ${solutionImages.length}개 이미지`);
-      
-      try {
-        // 기존 풀이 이미지가 있으면 삭제
-        if (existingSubmissionIndex >= 0 && assignment.submissions[existingSubmissionIndex].solutionImages) {
-          console.log('기존 풀이 이미지 삭제 시작');
-          for (const oldImageUrl of assignment.submissions[existingSubmissionIndex].solutionImages) {
-            try {
-              const publicIdInfo = extractPublicIdFromUrl(oldImageUrl);
-              if (publicIdInfo && publicIdInfo.publicId) {
-                await deleteFile(publicIdInfo.publicId, publicIdInfo.resourceType);
-                console.log(`기존 이미지 삭제 완료: ${publicIdInfo.publicId}`);
-              }
-            } catch (deleteError) {
-              console.error('기존 풀이 이미지 삭제 실패:', deleteError.message);
-              // 삭제 실패해도 계속 진행
-            }
-          }
+    // 스트로크 데이터 처리 (새 방식 - 우선)
+    let validatedStrokeData = [];
+    if (strokeData && Array.isArray(strokeData) && strokeData.length > 0) {
+      // 스트로크 데이터 유효성 검사 및 정리
+      validatedStrokeData = strokeData.map((pageData, index) => {
+        if (!pageData || typeof pageData !== 'object') {
+          return {
+            imageIndex: index,
+            canvasSize: { width: 2100, height: 2970 },
+            strokes: []
+          };
         }
 
-        // 새 풀이 이미지 업로드
-        for (let i = 0; i < solutionImages.length; i++) {
-          const base64Image = solutionImages[i];
-          if (base64Image && base64Image.startsWith('data:image')) {
-            try {
-              // base64 이미지 크기 확인 (디버깅용)
-              const imageSizeKB = Math.round(base64Image.length / 1024);
-              console.log(`풀이 이미지 ${i} 업로드 시작 (크기: ${imageSizeKB}KB)`);
-              
-              // base64를 Cloudinary에 업로드
-              const uploadResult = await cloudinary.uploader.upload(base64Image, {
-                folder: `assignments/${id}/solutions/${studentId}`,
-                resource_type: 'image',
-                public_id: `solution_${i}_${Date.now()}`,
-                overwrite: false
-              });
-              
-              solutionImageUrls.push(uploadResult.secure_url);
-              console.log(`풀이 이미지 ${i} 업로드 완료: ${uploadResult.secure_url.substring(0, 50)}...`);
-            } catch (uploadError) {
-              console.error(`풀이 이미지 ${i} 업로드 실패:`, uploadError.message || uploadError);
-              console.error('업로드 에러 상세:', JSON.stringify(uploadError, null, 2));
-              // 업로드 실패해도 계속 진행 (답안 제출은 성공)
-            }
-          } else {
-            console.warn(`풀이 이미지 ${i}가 유효한 base64 형식이 아닙니다.`);
-          }
-        }
-        
-        console.log(`풀이 이미지 업로드 완료: ${solutionImageUrls.length}/${solutionImages.length}개 성공`);
-      } catch (error) {
-        console.error('풀이 이미지 업로드 중 예상치 못한 오류:', error.message || error);
-        console.error('에러 스택:', error.stack);
-        // 이미지 업로드 실패해도 답안 제출은 계속 진행
-      }
-    } else {
-      console.log('풀이 이미지가 없습니다.');
+        // 스트로크 배열 검증
+        const validStrokes = Array.isArray(pageData.strokes)
+          ? pageData.strokes.filter(stroke =>
+              stroke &&
+              stroke.id &&
+              stroke.type &&
+              stroke.width &&
+              Array.isArray(stroke.points) &&
+              stroke.points.length > 0
+            )
+          : [];
+
+        return {
+          imageIndex: pageData.imageIndex ?? index,
+          canvasSize: pageData.canvasSize || { width: 2100, height: 2970 },
+          strokes: validStrokes
+        };
+      });
     }
 
     const submissionData = {
@@ -694,7 +668,7 @@ const submitAnswers = async (req, res) => {
       correctCount,
       wrongCount,
       submittedAt: new Date(),
-      solutionImages: solutionImageUrls
+      strokeData: validatedStrokeData
     };
 
     if (existingSubmissionIndex >= 0) {
@@ -787,7 +761,7 @@ const updateTimeSpent = async (req, res) => {
         correctCount: 0,
         wrongCount: 0,
         submittedAt: null,
-        solutionImages: []
+        strokeData: []
       });
       totalSeconds = seconds;
     }
@@ -808,6 +782,148 @@ const updateTimeSpent = async (req, res) => {
   }
 };
 
+// POST /api/assignments/:id/save-draft - 풀이 임시저장
+const saveDraft = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { strokeData } = req.body;
+    const studentId = req.user._id;
+
+    if (!studentId) {
+      return res.status(401).json({
+        success: false,
+        message: '인증이 필요합니다'
+      });
+    }
+
+    const assignment = await Assignment.findById(id);
+    if (!assignment) {
+      return res.status(404).json({
+        success: false,
+        message: '과제를 찾을 수 없습니다'
+      });
+    }
+
+    // 기존 제출이 있는지 확인
+    const existingSubmissionIndex = assignment.submissions.findIndex(
+      sub => String(sub.studentId) === String(studentId)
+    );
+
+    // 스트로크 데이터 검증
+    let validatedStrokeData = [];
+    if (strokeData && Array.isArray(strokeData)) {
+      validatedStrokeData = strokeData.map((pageData, index) => {
+        const validStrokes = Array.isArray(pageData.strokes)
+          ? pageData.strokes.filter(stroke =>
+              stroke &&
+              stroke.id &&
+              stroke.type &&
+              stroke.width &&
+              Array.isArray(stroke.points) &&
+              stroke.points.length > 0
+            )
+          : [];
+
+        return {
+          imageIndex: pageData.imageIndex ?? index,
+          canvasSize: pageData.canvasSize || { width: 2100, height: 2970 },
+          strokes: validStrokes
+        };
+      });
+    }
+
+    if (existingSubmissionIndex >= 0) {
+      // 기존 제출에 스트로크 데이터만 업데이트
+      assignment.submissions[existingSubmissionIndex].strokeData = validatedStrokeData;
+      assignment.submissions[existingSubmissionIndex].draftSavedAt = new Date();
+    } else {
+      // 새 임시저장 생성 (답안 없이 스트로크만)
+      assignment.submissions.push({
+        studentId,
+        studentAnswers: [],
+        correctCount: 0,
+        wrongCount: 0,
+        strokeData: validatedStrokeData,
+        draftSavedAt: new Date(),
+        submittedAt: null,  // 아직 제출 안 됨
+        timeSpentSeconds: 0
+      });
+    }
+
+    await assignment.save();
+
+    const totalStrokes = validatedStrokeData.reduce((sum, page) => sum + page.strokes.length, 0);
+
+    res.json({
+      success: true,
+      message: '임시저장되었습니다',
+      data: {
+        strokeCount: totalStrokes,
+        savedAt: new Date()
+      }
+    });
+  } catch (error) {
+    console.error('임시저장 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '임시저장 실패',
+      error: error.message
+    });
+  }
+};
+
+// GET /api/assignments/:id/draft - 임시저장된 풀이 조회
+const getDraft = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const studentId = req.user._id;
+
+    if (!studentId) {
+      return res.status(401).json({
+        success: false,
+        message: '인증이 필요합니다'
+      });
+    }
+
+    const assignment = await Assignment.findById(id);
+    if (!assignment) {
+      return res.status(404).json({
+        success: false,
+        message: '과제를 찾을 수 없습니다'
+      });
+    }
+
+    const submission = assignment.submissions.find(
+      sub => String(sub.studentId) === String(studentId)
+    );
+
+    if (!submission || !submission.strokeData || submission.strokeData.length === 0) {
+      return res.json({
+        success: true,
+        data: {
+          strokeData: [],
+          savedAt: null
+        }
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        strokeData: submission.strokeData,
+        savedAt: submission.draftSavedAt || submission.submittedAt
+      }
+    });
+  } catch (error) {
+    console.error('임시저장 조회 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '임시저장 조회 실패',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getAllAssignments,
   getAssignmentById,
@@ -815,6 +931,8 @@ module.exports = {
   updateAssignment,
   deleteAssignment,
   submitAnswers,
-  updateTimeSpent
+  updateTimeSpent,
+  saveDraft,
+  getDraft
 };
 

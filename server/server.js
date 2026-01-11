@@ -36,17 +36,11 @@ app.options('*', cors(corsOptions));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// 스케줄러 임포트
-const { scheduleCleanup } = require('./jobs/cleanupOldSolutions');
-
 // MongoDB 연결 및 서버 시작
 const startServer = async () => {
   try {
     // MongoDB 연결
     await connectDB();
-    
-    // 스케줄러 시작 (MongoDB 연결 후)
-    scheduleCleanup();
     
     // 서버 시작 (포트 에러는 서버 시작 시 처리)
     const server = app.listen(PORT, () => {
@@ -154,9 +148,9 @@ app.use('/api/assignments', assignmentRoutes);
 const answerRoutes = require('./routes/answers');
 app.use('/api/answers', answerRoutes);
 
-// Cloudinary 라우트
-const cloudinaryRoutes = require('./routes/cloudinary');
-app.use('/api/cloudinary', cloudinaryRoutes);
+// 업로드 라우트 (R2/Cloudinary 통합)
+const uploadRoutes = require('./routes/upload');
+app.use('/api/upload', uploadRoutes);
 
 // 학생 라우트
 const studentRoutes = require('./routes/students');

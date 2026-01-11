@@ -23,7 +23,30 @@ function TestResultModal({ showModal, onClose, course, allAssignments = [] }) {
   const [touchStartDistance, setTouchStartDistance] = useState(0);
   const [touchStartZoom, setTouchStartZoom] = useState(1);
   const [isPinching, setIsPinching] = useState(false);
-  
+
+  // 스트로크 데이터를 캔버스에 렌더링하는 함수
+  const renderStrokesToCanvas = (ctx, strokes) => {
+    if (!ctx || !strokes || !Array.isArray(strokes)) return;
+
+    strokes.forEach(stroke => {
+      if (!stroke || !stroke.points || stroke.points.length < 2) return;
+
+      ctx.beginPath();
+      ctx.globalCompositeOperation = stroke.type === 'eraser' ? 'destination-out' : 'source-over';
+      ctx.strokeStyle = stroke.color || '#000000';
+      ctx.lineWidth = stroke.width || 3;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+      for (let i = 1; i < stroke.points.length; i++) {
+        ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
+      }
+      ctx.stroke();
+      ctx.globalCompositeOperation = 'source-over';
+    });
+  };
+
   // 과제 목록 준비 - allAssignments에서 실제 과제 정보 가져오기
   const assignmentsWithDetails = course?.assignments ? course.assignments.map(assignment => {
     const assignmentId = assignment._id || assignment;
@@ -137,54 +160,75 @@ function TestResultModal({ showModal, onClose, course, allAssignments = [] }) {
       fileType: assignment.fileType
     });
     
-    // assignment의 submissions에서 해당 학생의 solutionImages 가져오기
+    // assignment의 submissions에서 해당 학생의 풀이 데이터 가져오기
     const submission = assignment.submissions?.find(sub => {
       const subStudentId = sub.studentId?._id || sub.studentId;
       return subStudentId && String(subStudentId) === String(studentId);
     });
-    
-    const solutionImageUrls = Array.isArray(submission?.solutionImages) 
-      ? submission.solutionImages 
+
+    // 스트로크 데이터 (새 방식) 우선 확인
+    const strokeDataArray = Array.isArray(submission?.strokeData)
+      ? submission.strokeData
       : [];
-    
-    console.log('[TestResultModal] 학생 풀이 이미지:', {
+
+    // 이미지 URL (기존 방식 - 하위 호환)
+    const solutionImageUrls = Array.isArray(submission?.solutionImages)
+      ? submission.solutionImages
+      : [];
+
+    console.log('[TestResultModal] 학생 풀이 데이터:', {
       studentId: studentId,
       studentName: studentName,
       hasSubmission: !!submission,
+      strokeDataCount: strokeDataArray.length,
       solutionImageUrlsCount: solutionImageUrls.length,
-      solutionImageUrls: solutionImageUrls
+      hasStrokeData: strokeDataArray.length > 0,
+      hasSolutionImages: solutionImageUrls.length > 0
     });
-    
-    // Cloudinary에서 가져온 풀이 이미지와 원본 이미지 매칭
-    // 원본 이미지가 있으면 무조건 모든 원본 이미지를 표시 (풀이가 없어도)
-    if (originalImages.length > 0) {
+
+    // 스트로크 데이터 우선 사용 (새 방식)
+    if (strokeDataArray.length > 0) {
+      // 원본 이미지가 있으면 원본 이미지 개수만큼, 없으면 스트로크 데이터 개수만큼
+      const pageCount = originalImages.length > 0 ? originalImages.length : strokeDataArray.length;
+
+      for (let i = 0; i < pageCount; i++) {
+        const pageStrokeData = strokeDataArray[i] || { strokes: [], canvasSize: { width: 2100, height: 2970 } };
+        solutionData.push({
+          index: i,
+          originalImage: originalImages[i]?.url || null,
+          strokes: pageStrokeData.strokes || [],
+          canvasSize: pageStrokeData.canvasSize || { width: 2100, height: 2970 },
+          drawing: null // 스트로크 방식에서는 이미지 URL 없음
+        });
+      }
+      console.log('[TestResultModal] 스트로크 데이터 기반 solutionData 생성:', {
+        solutionDataCount: solutionData.length,
+        totalStrokes: solutionData.reduce((sum, page) => sum + (page.strokes?.length || 0), 0)
+      });
+    }
+    // 이미지 URL 사용 (기존 방식 - 하위 호환)
+    else if (originalImages.length > 0) {
       // 모든 원본 이미지를 solutionData에 추가
-      // 원본 이미지 개수만큼 반복하여 모든 페이지 표시
       for (let i = 0; i < originalImages.length; i++) {
         solutionData.push({
           index: i,
           originalImage: originalImages[i].url,
-          drawing: (i < solutionImageUrls.length && solutionImageUrls[i]) ? solutionImageUrls[i] : null // 풀이가 있으면 추가, 없으면 null
+          drawing: (i < solutionImageUrls.length && solutionImageUrls[i]) ? solutionImageUrls[i] : null,
+          strokes: null // 이미지 방식에서는 스트로크 없음
         });
       }
-      console.log('[TestResultModal] 원본 이미지 기반 solutionData 생성:', {
+      console.log('[TestResultModal] 이미지 URL 기반 solutionData 생성:', {
         solutionDataCount: solutionData.length,
         originalImagesCount: originalImages.length,
-        solutionImageUrlsCount: solutionImageUrls.length,
-        solutionData: solutionData.map(s => ({
-          index: s.index,
-          hasOriginal: !!s.originalImage,
-          originalImageUrl: s.originalImage,
-          hasDrawing: !!s.drawing,
-          drawingUrl: s.drawing
-        }))
+        solutionImageUrlsCount: solutionImageUrls.length
       });
     } else if (solutionImageUrls.length > 0) {
       // 원본 이미지가 없지만 풀이가 있는 경우 (빈 캔버스)
       solutionData.push({
         index: -1,
         originalImage: null,
-        drawing: solutionImageUrls[0] || null
+        drawing: solutionImageUrls[0] || null,
+        strokes: null
       });
     }
     
@@ -291,8 +335,14 @@ function TestResultModal({ showModal, onClose, course, allAssignments = [] }) {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(img, 0, 0);
             
-            // 필기 데이터가 있으면 오버레이
-            if (currentSolution.drawing) {
+            // 스트로크 데이터가 있으면 스트로크 렌더링 (새 방식)
+            if (currentSolution.strokes && Array.isArray(currentSolution.strokes) && currentSolution.strokes.length > 0) {
+              drawingCtx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
+              renderStrokesToCanvas(drawingCtx, currentSolution.strokes);
+              setSolutionImageLoaded(true);
+            }
+            // 이미지 URL이 있으면 이미지 로드 (기존 방식 - 하위 호환)
+            else if (currentSolution.drawing) {
               const drawingImg = new Image();
               drawingImg.onload = () => {
                 // drawingCanvas를 투명하게 지우기
@@ -366,9 +416,15 @@ function TestResultModal({ showModal, onClose, course, allAssignments = [] }) {
           // 흰색 배경
           ctx.fillStyle = '#ffffff';
           ctx.fillRect(0, 0, canvas.width, canvas.height);
-          
-          // 필기 데이터 표시
-          if (currentSolution.drawing) {
+
+          // 스트로크 데이터가 있으면 스트로크 렌더링 (새 방식)
+          if (currentSolution.strokes && Array.isArray(currentSolution.strokes) && currentSolution.strokes.length > 0) {
+            drawingCtx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
+            renderStrokesToCanvas(drawingCtx, currentSolution.strokes);
+            setSolutionImageLoaded(true);
+          }
+          // 이미지 URL이 있으면 이미지 로드 (기존 방식 - 하위 호환)
+          else if (currentSolution.drawing) {
             const drawingImg = new Image();
             drawingImg.onload = () => {
               drawingCtx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
