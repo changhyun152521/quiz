@@ -259,6 +259,28 @@
   font-family: 'Pretendard', sans-serif;
 }
 
+.test-result-table th.sortable-header {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.test-result-table th.sortable-header:hover {
+  background-color: #e9ecef;
+  color: #1a1a1a;
+}
+
+.sort-indicator {
+  color: #adb5bd;
+  font-size: 11px;
+  margin-left: 4px;
+  transition: color 0.2s ease;
+}
+
+.sort-indicator.active {
+  color: #1a1a1a;
+}
+
 .test-result-table td {
   padding: 16px;
   border-bottom: 1px solid #f0f0f0;

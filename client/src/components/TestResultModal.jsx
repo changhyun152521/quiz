@@ -12,6 +12,9 @@ function TestResultModal({ showModal, onClose, course, allAssignments = [] }) {
   const [selectedStudentForSolution, setSelectedStudentForSolution] = useState(null);
   const [studentSolutionImages, setStudentSolutionImages] = useState([]);
   const [currentSolutionImageIndex, setCurrentSolutionImageIndex] = useState(0);
+
+  // 정렬 상태 (기본: 학생명 오름차순)
+  const [sortConfig, setSortConfig] = useState({ key: 'studentName', direction: 'asc' });
   const [solutionImageLoaded, setSolutionImageLoaded] = useState(false);
   const solutionCanvasRef = useRef(null);
   const solutionDrawingCanvasRef = useRef(null);
@@ -603,6 +606,62 @@ function TestResultModal({ showModal, onClose, course, allAssignments = [] }) {
     });
   };
 
+  // 정렬 핸들러
+  const handleSort = (key) => {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  };
+
+  // 정렬된 학생 결과
+  const sortedStudentResults = [...studentResults].sort((a, b) => {
+    if (!sortConfig.key) return 0;
+
+    let aValue, bValue;
+
+    switch (sortConfig.key) {
+      case 'studentName':
+        aValue = a.studentName || '';
+        bValue = b.studentName || '';
+        break;
+      case 'submittedAt':
+        // 미제출은 맨 뒤로
+        if (!a.submittedAt && !b.submittedAt) return 0;
+        if (!a.submittedAt) return sortConfig.direction === 'asc' ? 1 : -1;
+        if (!b.submittedAt) return sortConfig.direction === 'asc' ? -1 : 1;
+        aValue = new Date(a.submittedAt).getTime();
+        bValue = new Date(b.submittedAt).getTime();
+        break;
+      case 'timeSpentSeconds':
+        // 소요시간이 없거나 0인 경우 맨 뒤로
+        if (!a.timeSpentSeconds && !b.timeSpentSeconds) return 0;
+        if (!a.timeSpentSeconds) return 1;
+        if (!b.timeSpentSeconds) return -1;
+        aValue = a.timeSpentSeconds;
+        bValue = b.timeSpentSeconds;
+        break;
+      case 'correctCount':
+        // 미제출(submittedAt 없음)인 경우 맨 뒤로
+        if (!a.submittedAt && !b.submittedAt) return 0;
+        if (!a.submittedAt) return 1;
+        if (!b.submittedAt) return -1;
+        aValue = a.correctCount || 0;
+        bValue = b.correctCount || 0;
+        break;
+      default:
+        return 0;
+    }
+
+    if (typeof aValue === 'string') {
+      return sortConfig.direction === 'asc'
+        ? aValue.localeCompare(bValue, 'ko')
+        : bValue.localeCompare(aValue, 'ko');
+    }
+
+    return sortConfig.direction === 'asc' ? aValue - bValue : bValue - aValue;
+  });
+
   // 소요 시간 포맷팅 함수
   const formatTimeSpent = (totalSeconds) => {
     if (!totalSeconds || totalSeconds <= 0) return '-';
@@ -838,22 +897,54 @@ function TestResultModal({ showModal, onClose, course, allAssignments = [] }) {
                 <table className="test-result-table">
                   <thead>
                     <tr>
-                      <th>학생명</th>
-                      <th>제출 상태</th>
-                      <th>소요 시간</th>
-                      <th>결과</th>
+                      <th
+                        className="sortable-header"
+                        onClick={() => handleSort('studentName')}
+                      >
+                        학생명
+                        <span className={`sort-indicator ${sortConfig.key === 'studentName' ? 'active' : ''}`}>
+                          {sortConfig.key === 'studentName' ? (sortConfig.direction === 'asc' ? ' ▲' : ' ▼') : ' ⇅'}
+                        </span>
+                      </th>
+                      <th
+                        className="sortable-header"
+                        onClick={() => handleSort('submittedAt')}
+                      >
+                        제출 상태
+                        <span className={`sort-indicator ${sortConfig.key === 'submittedAt' ? 'active' : ''}`}>
+                          {sortConfig.key === 'submittedAt' ? (sortConfig.direction === 'asc' ? ' ▲' : ' ▼') : ' ⇅'}
+                        </span>
+                      </th>
+                      <th
+                        className="sortable-header"
+                        onClick={() => handleSort('timeSpentSeconds')}
+                      >
+                        소요 시간
+                        <span className={`sort-indicator ${sortConfig.key === 'timeSpentSeconds' ? 'active' : ''}`}>
+                          {sortConfig.key === 'timeSpentSeconds' ? (sortConfig.direction === 'asc' ? ' ▲' : ' ▼') : ' ⇅'}
+                        </span>
+                      </th>
+                      <th
+                        className="sortable-header"
+                        onClick={() => handleSort('correctCount')}
+                      >
+                        결과
+                        <span className={`sort-indicator ${sortConfig.key === 'correctCount' ? 'active' : ''}`}>
+                          {sortConfig.key === 'correctCount' ? (sortConfig.direction === 'asc' ? ' ▲' : ' ▼') : ' ⇅'}
+                        </span>
+                      </th>
                       <th>풀이</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {studentResults.length === 0 ? (
+                    {sortedStudentResults.length === 0 ? (
                       <tr>
                         <td colSpan="5" className="test-result-empty">
                           수강생이 없습니다.
                         </td>
                       </tr>
                     ) : (
-                      studentResults.map((result) => (
+                      sortedStudentResults.map((result) => (
                         <tr key={result.studentId}>
                           <td>
                             {result.studentName}
