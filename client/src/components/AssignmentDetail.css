@@ -922,9 +922,10 @@
 }
 
 .answer-panel-footer {
-  padding: 12px 0;
+  padding: 12px 16px;
   border-top: 1px solid #e5e5e5;
-  margin-top: auto;
+  flex-shrink: 0;
+  background: #ffffff;
 }
 
 .btn-submit-answer {
@@ -964,10 +965,21 @@
   .answer-panel {
     width: 100%;
     right: -100%;
+    max-width: 100%;
   }
 
   .answer-panel.open {
     right: 0;
+  }
+
+  .answer-panel-footer {
+    padding: 12px 16px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+
+  .btn-submit-answer {
+    padding: 14px 20px;
+    font-size: 15px;
   }
 }
 

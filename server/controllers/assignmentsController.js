@@ -733,40 +733,54 @@ const updateTimeSpent = async (req, res) => {
       });
     }
 
-    const assignment = await Assignment.findById(id);
-    if (!assignment) {
-      return res.status(404).json({
-        success: false,
-        message: '과제를 찾을 수 없습니다'
-      });
-    }
-
-    const existingIndex = assignment.submissions.findIndex(
-      sub => sub.studentId.toString() === studentId.toString()
+    // 원자적 업데이트: 기존 submission이 있으면 시간 누적
+    const updateResult = await Assignment.findOneAndUpdate(
+      {
+        _id: id,
+        'submissions.studentId': studentId
+      },
+      {
+        $inc: { 'submissions.$.timeSpentSeconds': seconds }
+      },
+      { new: true }
     );
 
     let totalSeconds = 0;
 
-    if (existingIndex >= 0) {
-      // 기존 submission이 있으면 시간 누적
-      assignment.submissions[existingIndex].timeSpentSeconds =
-        (assignment.submissions[existingIndex].timeSpentSeconds || 0) + seconds;
-      totalSeconds = assignment.submissions[existingIndex].timeSpentSeconds;
+    if (updateResult) {
+      // 기존 submission 업데이트 성공
+      const submission = updateResult.submissions.find(
+        sub => sub.studentId.toString() === studentId.toString()
+      );
+      totalSeconds = submission?.timeSpentSeconds || seconds;
     } else {
-      // 없으면 새 submission 생성 (체류 시간만 기록)
-      assignment.submissions.push({
-        studentId,
-        timeSpentSeconds: seconds,
-        studentAnswers: [],
-        correctCount: 0,
-        wrongCount: 0,
-        submittedAt: null,
-        strokeData: []
-      });
+      // 기존 submission이 없으면 새로 추가
+      const pushResult = await Assignment.findByIdAndUpdate(
+        id,
+        {
+          $push: {
+            submissions: {
+              studentId,
+              timeSpentSeconds: seconds,
+              studentAnswers: [],
+              correctCount: 0,
+              wrongCount: 0,
+              submittedAt: null,
+              strokeData: []
+            }
+          }
+        },
+        { new: true }
+      );
+
+      if (!pushResult) {
+        return res.status(404).json({
+          success: false,
+          message: '과제를 찾을 수 없습니다'
+        });
+      }
       totalSeconds = seconds;
     }
-
-    await assignment.save();
 
     res.json({
       success: true,
@@ -796,19 +810,6 @@ const saveDraft = async (req, res) => {
       });
     }
 
-    const assignment = await Assignment.findById(id);
-    if (!assignment) {
-      return res.status(404).json({
-        success: false,
-        message: '과제를 찾을 수 없습니다'
-      });
-    }
-
-    // 기존 제출이 있는지 확인
-    const existingSubmissionIndex = assignment.submissions.findIndex(
-      sub => String(sub.studentId) === String(studentId)
-    );
-
     // 스트로크 데이터 검증
     let validatedStrokeData = [];
     if (strokeData && Array.isArray(strokeData)) {
@@ -832,34 +833,59 @@ const saveDraft = async (req, res) => {
       });
     }
 
-    if (existingSubmissionIndex >= 0) {
-      // 기존 제출에 스트로크 데이터만 업데이트
-      assignment.submissions[existingSubmissionIndex].strokeData = validatedStrokeData;
-      assignment.submissions[existingSubmissionIndex].draftSavedAt = new Date();
-    } else {
-      // 새 임시저장 생성 (답안 없이 스트로크만)
-      assignment.submissions.push({
-        studentId,
-        studentAnswers: [],
-        correctCount: 0,
-        wrongCount: 0,
-        strokeData: validatedStrokeData,
-        draftSavedAt: new Date(),
-        submittedAt: null,  // 아직 제출 안 됨
-        timeSpentSeconds: 0
-      });
-    }
-
-    await assignment.save();
-
     const totalStrokes = validatedStrokeData.reduce((sum, page) => sum + page.strokes.length, 0);
+    const now = new Date();
+
+    // 원자적 업데이트: 기존 submission이 있으면 스트로크 데이터 업데이트
+    const updateResult = await Assignment.findOneAndUpdate(
+      {
+        _id: id,
+        'submissions.studentId': studentId
+      },
+      {
+        $set: {
+          'submissions.$.strokeData': validatedStrokeData,
+          'submissions.$.draftSavedAt': now
+        }
+      },
+      { new: true }
+    );
+
+    if (!updateResult) {
+      // 기존 submission이 없으면 새로 추가
+      const pushResult = await Assignment.findByIdAndUpdate(
+        id,
+        {
+          $push: {
+            submissions: {
+              studentId,
+              studentAnswers: [],
+              correctCount: 0,
+              wrongCount: 0,
+              strokeData: validatedStrokeData,
+              draftSavedAt: now,
+              submittedAt: null,
+              timeSpentSeconds: 0
+            }
+          }
+        },
+        { new: true }
+      );
+
+      if (!pushResult) {
+        return res.status(404).json({
+          success: false,
+          message: '과제를 찾을 수 없습니다'
+        });
+      }
+    }
 
     res.json({
       success: true,
       message: '임시저장되었습니다',
       data: {
         strokeCount: totalStrokes,
-        savedAt: new Date()
+        savedAt: now
       }
     });
   } catch (error) {
