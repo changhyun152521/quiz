@@ -1,4 +1,5 @@
 const Assignment = require('../models/Assignment');
+const StrokeData = require('../models/StrokeData');
 const getUser = require('../models/User');
 const { deleteFileByUrl } = require('../utils/fileService');
 
@@ -9,7 +10,9 @@ const getAllAssignments = async (req, res) => {
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
 
+    // 목록 조회 시 submissions 상세 정보 제외 (성능 최적화)
     const assignments = await Assignment.find()
+      .select('-submissions.studentAnswers -submissions.solutionImages')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);
@@ -131,6 +134,24 @@ const getAssignmentById = async (req, res) => {
       // 원본 assignment에 정답이 있으면 포함
       if (assignment.answers && assignment.answers.length > 0) {
         assignmentObj.answers = assignment.answers;
+      }
+    }
+
+    // 학생인 경우: 자신의 strokeData만 가져오기 (과제 풀이 화면용)
+    // 선생님/관리자: strokeData는 별도 API로 조회 (GET /api/assignments/:id/stroke-data/:studentId)
+    if (isStudent && user && assignmentObj.submissions && assignmentObj.submissions.length > 0) {
+      const studentStrokeData = await StrokeData.findOne({
+        assignmentId: req.params.id,
+        studentId: user._id
+      });
+
+      // 자신의 submission에 strokeData 추가
+      for (let i = 0; i < assignmentObj.submissions.length; i++) {
+        const sub = assignmentObj.submissions[i];
+        const subStudentId = sub.studentId?._id || sub.studentId;
+        if (subStudentId && String(subStudentId) === String(user._id)) {
+          assignmentObj.submissions[i].strokeData = studentStrokeData?.pages || [];
+        }
       }
     }
 
@@ -545,6 +566,9 @@ const deleteAssignment = async (req, res) => {
       await Promise.all(deletePromises);
     }
 
+    // 관련 StrokeData 삭제
+    await StrokeData.deleteMany({ assignmentId: req.params.id });
+
     // 과제 삭제
     await Assignment.findByIdAndDelete(req.params.id);
 
@@ -629,11 +653,10 @@ const submitAnswers = async (req, res) => {
       sub => sub.studentId.toString() === studentId.toString()
     );
 
-    // 스트로크 데이터 처리 (새 방식 - 우선)
-    let validatedStrokeData = [];
+    // 스트로크 데이터 처리 - 별도 컬렉션(StrokeData)에 저장
     if (strokeData && Array.isArray(strokeData) && strokeData.length > 0) {
       // 스트로크 데이터 유효성 검사 및 정리
-      validatedStrokeData = strokeData.map((pageData, index) => {
+      const validatedStrokeData = strokeData.map((pageData, index) => {
         if (!pageData || typeof pageData !== 'object') {
           return {
             imageIndex: index,
@@ -660,15 +683,26 @@ const submitAnswers = async (req, res) => {
           strokes: validStrokes
         };
       });
+
+      // StrokeData 컬렉션에 upsert (있으면 업데이트, 없으면 생성)
+      await StrokeData.findOneAndUpdate(
+        { assignmentId: id, studentId },
+        {
+          pages: validatedStrokeData,
+          draftSavedAt: new Date()
+        },
+        { upsert: true, new: true }
+      );
     }
 
+    const now = new Date();
     const submissionData = {
       studentId,
       studentAnswers,
       correctCount,
       wrongCount,
-      submittedAt: new Date(),
-      strokeData: validatedStrokeData
+      submittedAt: now,
+      draftSavedAt: now
     };
 
     if (existingSubmissionIndex >= 0) {
@@ -810,6 +844,15 @@ const saveDraft = async (req, res) => {
       });
     }
 
+    // 과제 존재 확인
+    const assignment = await Assignment.findById(id).select('_id');
+    if (!assignment) {
+      return res.status(404).json({
+        success: false,
+        message: '과제를 찾을 수 없습니다'
+      });
+    }
+
     // 스트로크 데이터 검증
     let validatedStrokeData = [];
     if (strokeData && Array.isArray(strokeData)) {
@@ -836,7 +879,17 @@ const saveDraft = async (req, res) => {
     const totalStrokes = validatedStrokeData.reduce((sum, page) => sum + page.strokes.length, 0);
     const now = new Date();
 
-    // 원자적 업데이트: 기존 submission이 있으면 스트로크 데이터 업데이트
+    // StrokeData 컬렉션에 upsert (있으면 업데이트, 없으면 생성)
+    await StrokeData.findOneAndUpdate(
+      { assignmentId: id, studentId },
+      {
+        pages: validatedStrokeData,
+        draftSavedAt: now
+      },
+      { upsert: true, new: true }
+    );
+
+    // Assignment의 submission에 draftSavedAt 시간만 업데이트
     const updateResult = await Assignment.findOneAndUpdate(
       {
         _id: id,
@@ -844,7 +897,6 @@ const saveDraft = async (req, res) => {
       },
       {
         $set: {
-          'submissions.$.strokeData': validatedStrokeData,
           'submissions.$.draftSavedAt': now
         }
       },
@@ -852,8 +904,8 @@ const saveDraft = async (req, res) => {
     );
 
     if (!updateResult) {
-      // 기존 submission이 없으면 새로 추가
-      const pushResult = await Assignment.findByIdAndUpdate(
+      // 기존 submission이 없으면 새로 추가 (strokeData 없이)
+      await Assignment.findByIdAndUpdate(
         id,
         {
           $push: {
@@ -862,7 +914,6 @@ const saveDraft = async (req, res) => {
               studentAnswers: [],
               correctCount: 0,
               wrongCount: 0,
-              strokeData: validatedStrokeData,
               draftSavedAt: now,
               submittedAt: null,
               timeSpentSeconds: 0
@@ -871,13 +922,6 @@ const saveDraft = async (req, res) => {
         },
         { new: true }
       );
-
-      if (!pushResult) {
-        return res.status(404).json({
-          success: false,
-          message: '과제를 찾을 수 없습니다'
-        });
-      }
     }
 
     res.json({
@@ -911,7 +955,8 @@ const getDraft = async (req, res) => {
       });
     }
 
-    const assignment = await Assignment.findById(id);
+    // 과제 존재 확인
+    const assignment = await Assignment.findById(id).select('_id');
     if (!assignment) {
       return res.status(404).json({
         success: false,
@@ -919,11 +964,13 @@ const getDraft = async (req, res) => {
       });
     }
 
-    const submission = assignment.submissions.find(
-      sub => String(sub.studentId) === String(studentId)
-    );
+    // StrokeData 컬렉션에서 조회
+    const strokeDataDoc = await StrokeData.findOne({
+      assignmentId: id,
+      studentId
+    });
 
-    if (!submission || !submission.strokeData || submission.strokeData.length === 0) {
+    if (!strokeDataDoc || !strokeDataDoc.pages || strokeDataDoc.pages.length === 0) {
       return res.json({
         success: true,
         data: {
@@ -936,8 +983,8 @@ const getDraft = async (req, res) => {
     res.json({
       success: true,
       data: {
-        strokeData: submission.strokeData,
-        savedAt: submission.draftSavedAt || submission.submittedAt
+        strokeData: strokeDataDoc.pages,
+        savedAt: strokeDataDoc.draftSavedAt || strokeDataDoc.updatedAt
       }
     });
   } catch (error) {
@@ -945,6 +992,62 @@ const getDraft = async (req, res) => {
     res.status(500).json({
       success: false,
       message: '임시저장 조회 실패',
+      error: error.message
+    });
+  }
+};
+
+// GET /api/assignments/:id/stroke-data/:studentId - 특정 학생의 strokeData 조회 (선생님용)
+const getStudentStrokeData = async (req, res) => {
+  try {
+    const { id, studentId } = req.params;
+    const user = req.user;
+
+    // 권한 확인: 선생님/관리자만 가능
+    if (!user || (!user.isAdmin && user.userType !== '강사')) {
+      return res.status(403).json({
+        success: false,
+        message: '권한이 없습니다'
+      });
+    }
+
+    // 과제 존재 확인
+    const assignment = await Assignment.findById(id).select('_id');
+    if (!assignment) {
+      return res.status(404).json({
+        success: false,
+        message: '과제를 찾을 수 없습니다'
+      });
+    }
+
+    // StrokeData 컬렉션에서 조회
+    const strokeDataDoc = await StrokeData.findOne({
+      assignmentId: id,
+      studentId
+    });
+
+    if (!strokeDataDoc || !strokeDataDoc.pages || strokeDataDoc.pages.length === 0) {
+      return res.json({
+        success: true,
+        data: {
+          strokeData: [],
+          savedAt: null
+        }
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        strokeData: strokeDataDoc.pages,
+        savedAt: strokeDataDoc.draftSavedAt || strokeDataDoc.updatedAt
+      }
+    });
+  } catch (error) {
+    console.error('학생 strokeData 조회 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '학생 풀이 데이터 조회 실패',
       error: error.message
     });
   }
@@ -959,6 +1062,7 @@ module.exports = {
   submitAnswers,
   updateTimeSpent,
   saveDraft,
-  getDraft
+  getDraft,
+  getStudentStrokeData
 };
 

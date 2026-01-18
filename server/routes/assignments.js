@@ -9,7 +9,8 @@ const {
   submitAnswers,
   updateTimeSpent,
   saveDraft,
-  getDraft
+  getDraft,
+  getStudentStrokeData
 } = require('../controllers/assignmentsController');
 const { authenticate, authorize } = require('../middleware/auth');
 
@@ -61,6 +62,9 @@ router.post('/:id/save-draft', authenticate, saveDraft);
 
 // GET /api/assignments/:id/draft - 임시저장된 풀이 조회
 router.get('/:id/draft', authenticate, getDraft);
+
+// GET /api/assignments/:id/stroke-data/:studentId - 특정 학생의 strokeData 조회 (선생님용)
+router.get('/:id/stroke-data/:studentId', authenticate, getStudentStrokeData);
 
 module.exports = router;
 

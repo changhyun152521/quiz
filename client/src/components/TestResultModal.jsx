@@ -169,10 +169,19 @@ function TestResultModal({ showModal, onClose, course, allAssignments = [] }) {
       return subStudentId && String(subStudentId) === String(studentId);
     });
 
-    // 스트로크 데이터 (새 방식) 우선 확인
-    const strokeDataArray = Array.isArray(submission?.strokeData)
-      ? submission.strokeData
-      : [];
+    // 스트로크 데이터 별도 API로 조회 (선생님용)
+    let strokeDataArray = [];
+    try {
+      const strokeResponse = await get(`/api/assignments/${assignmentId}/stroke-data/${studentId}`);
+      const strokeResult = await strokeResponse.json();
+      if (strokeResult.success && strokeResult.data?.strokeData) {
+        strokeDataArray = strokeResult.data.strokeData;
+      }
+    } catch (error) {
+      console.error('스트로크 데이터 조회 오류:', error);
+      // 에러 시 submission에 있는 데이터 사용 (하위 호환)
+      strokeDataArray = Array.isArray(submission?.strokeData) ? submission.strokeData : [];
+    }
 
     // 이미지 URL (기존 방식 - 하위 호환)
     const solutionImageUrls = Array.isArray(submission?.solutionImages)
@@ -996,7 +1005,6 @@ function TestResultModal({ showModal, onClose, course, allAssignments = [] }) {
                             <button
                               className="view-solution-btn"
                               onClick={() => handleViewStudentSolution(result.studentId, result.studentName)}
-                              disabled={!result.submittedAt}
                             >
                               풀이 보기
                             </button>

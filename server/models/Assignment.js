@@ -3,30 +3,8 @@
 
 const mongoose = require('mongoose');
 
-// 스트로크 포인트 스키마 (x, y 좌표)
-const PointSchema = new mongoose.Schema({
-  x: { type: Number, required: true },
-  y: { type: Number, required: true }
-}, { _id: false });
-
-// 개별 스트로크 스키마
-const StrokeSchema = new mongoose.Schema({
-  id: { type: String, required: true },
-  type: { type: String, enum: ['pen', 'eraser'], required: true },
-  color: { type: String },  // eraser일 경우 null
-  width: { type: Number, required: true },
-  points: [PointSchema]
-}, { _id: false });
-
-// 페이지별 스트로크 데이터 스키마
-const PageStrokesSchema = new mongoose.Schema({
-  imageIndex: { type: Number, required: true },
-  canvasSize: {
-    width: { type: Number, default: 2100 },
-    height: { type: Number, default: 2970 }
-  },
-  strokes: [StrokeSchema]
-}, { _id: false });
+// 스트로크 데이터는 별도 컬렉션(StrokeData)으로 분리됨
+// 메모리 최적화를 위해 Assignment 문서에서 제거
 
 const assignmentSchema = new mongoose.Schema({
   // 과제명
@@ -198,10 +176,11 @@ const assignmentSchema = new mongoose.Schema({
         type: [String],
         default: []
       },
-      // 학생 풀이 스트로크 데이터 - 새 방식 (MongoDB 직접 저장)
-      strokeData: {
-        type: [PageStrokesSchema],
-        default: []
+      // strokeData는 별도 컬렉션(StrokeData)으로 분리됨
+      // 임시저장 시간 (StrokeData 컬렉션 참조용)
+      draftSavedAt: {
+        type: Date,
+        default: null
       },
       // 페이지 체류 시간 (초)
       timeSpentSeconds: {

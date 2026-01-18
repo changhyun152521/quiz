@@ -318,10 +318,10 @@ const getStudyReport = async (req, res) => {
     // 과제 ID 배열 (모든 QUIZ 과제 포함)
     const assignmentIds = quizAssignments.map(a => a._id);
 
-    // 해당 과제들의 제출 정보 가져오기
+    // 해당 과제들의 제출 정보 가져오기 (strokeData 제외하고 필요한 필드만 조회)
     const assignments = await Assignment.find({
       _id: { $in: assignmentIds }
-    }).select('subject mainUnit subUnit questionCount answers submissions');
+    }).select('subject mainUnit subUnit questionCount answers submissions.studentId submissions.correctCount submissions.wrongCount submissions.submittedAt');
 
     // 학생의 제출 정보 추출 (제출일이 기간 내에 있는 것만)
     const studentSubmissions = [];
