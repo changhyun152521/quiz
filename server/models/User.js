@@ -72,13 +72,9 @@ const getUser = () => {
 
   const mathchangConn = getMathchangConnection();
   if (mathchangConn) {
-    // mathchang DB 연결이 있으면 해당 연결에서 User 모델 생성
     UserModel = mathchangConn.model('User', userSchema);
-    console.log('✓ User model created on mathchang DB');
   } else {
-    // mathchang DB 연결이 없으면 기본 mongoose 연결 사용 (fallback)
     UserModel = mongoose.model('User', userSchema);
-    console.log('⚠ User model created on default connection (quiz DB)');
   }
 
   return UserModel;

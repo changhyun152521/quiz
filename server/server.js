@@ -2,14 +2,6 @@
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 
-// 디버깅: .env 파일 로드 확인
-console.log('=== Environment Variables Check ===');
-console.log('NODE_ENV:', process.env.NODE_ENV || 'not set');
-console.log('PORT:', process.env.PORT || '5000 (default)');
-console.log('MONGODB_ATLAS_URL:', process.env.MONGODB_ATLAS_URL ? '✓ SET' : '✗ NOT SET');
-console.log('MONGODB_URI:', process.env.MONGODB_URI ? '✓ SET' : '✗ NOT SET');
-console.log('===================================\n');
-
 const express = require('express');
 const cors = require('cors');
 const connectDB = require('./config/database');
@@ -35,6 +27,24 @@ app.options('*', cors(corsOptions));
 // JSON body parser - 큰 이미지 업로드를 위해 크기 제한 증가 (50MB)
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// 요청/응답 로깅 미들웨어
+app.use((req, res, next) => {
+  const start = Date.now();
+
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    const log = `${req.method} ${req.originalUrl} ${res.statusCode} ${duration}ms`;
+
+    if (res.statusCode >= 400) {
+      console.warn(`[API] ${log}`);
+    } else {
+      console.log(`[API] ${log}`);
+    }
+  });
+
+  next();
+});
 
 // MongoDB 연결 및 서버 시작
 const startServer = async () => {

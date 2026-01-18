@@ -11,8 +11,6 @@ const cloudinary = require('./cloudinary');
 const useR2 = r2.isConfigured;
 const storageType = useR2 ? 'R2' : 'Cloudinary';
 
-console.log(`[파일서비스] ${storageType} 스토리지 사용`);
-
 /**
  * URL이 R2 URL인지 확인
  */
