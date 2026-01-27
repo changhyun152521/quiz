@@ -696,6 +696,7 @@
   width: 350px;
   max-width: 40%;
   height: 100vh;
+  height: 100dvh; /* iOS Safari/태블릿에서 주소창 높이 제외 */
   background: #ffffff;
   box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
   z-index: 1000;
@@ -923,6 +924,7 @@
 
 .answer-panel-footer {
   padding: 12px 16px;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
   border-top: 1px solid #e5e5e5;
   flex-shrink: 0;
   background: #ffffff;
