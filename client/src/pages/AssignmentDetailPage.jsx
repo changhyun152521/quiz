@@ -263,6 +263,9 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
 
   // 제출 상태 확인 및 만료된 데이터 정리
   useEffect(() => {
+    // 제출 중일 때는 상태 변경하지 않음 (race condition 방지)
+    if (isSubmitting) return;
+
     const assignmentToCheck = currentAssignment || assignment;
 
     if (assignmentToCheck && user && assignmentToCheck.submissions) {
@@ -333,7 +336,7 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
     if (assignmentToClean && assignmentToClean._id) {
       cleanupExpiredCanvasData(assignmentToClean._id);
     }
-  }, [currentAssignment, assignment, user]);
+  }, [currentAssignment, assignment, user, isSubmitting]);
 
   // 정답 초기화 - 문항수만큼 필드 생성 (제출되지 않은 경우만)
   useEffect(() => {
@@ -2462,17 +2465,15 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
           </div>
           )}
         </div>
-        {!isSubmitted && (
         <div className="answer-panel-footer">
           <button
             className="btn-submit-answer"
             onClick={handleSubmitAnswers}
             disabled={isSubmitting}
           >
-            {isSubmitting ? '제출 중...' : '제출하기'}
+            {isSubmitting ? '제출 중...' : (isSubmitted ? '다시 제출하기' : '제출하기')}
           </button>
         </div>
-        )}
       </div>
       {showAnswerPanel && (
         <div 
