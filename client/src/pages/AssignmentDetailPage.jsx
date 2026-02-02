@@ -427,7 +427,7 @@ function AssignmentDetailPage({ assignment, user, onBack, onAssignmentUpdate }) 
         console.error('localStorage 스트로크 파싱 오류:', e);
       }
     }
-  }, [assignment?._id, studentId, user?.userType, images.length]);
+  }, [assignment?._id, studentId, user?.userType, images.length, currentImageIndex]);
 
   // 정답 패널이 열릴 때마다 assignment의 최신 정보 가져오기 (answers 포함)
   // 주의: 이 useEffect는 정답 버튼 클릭 시 이미 데이터를 가져오므로 중복 방지
