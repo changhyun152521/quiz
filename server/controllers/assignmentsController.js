@@ -1,14 +1,27 @@
 const Assignment = require('../models/Assignment');
 const StrokeData = require('../models/StrokeData');
 const getUser = require('../models/User');
+const Course = require('../models/Course');
 const { deleteFileByUrl } = require('../utils/fileService');
+const { parsePagination } = require('../utils/pagination');
+const {
+  resolveStudentAccess,
+  sendAccessError,
+  requireStudentActor,
+} = require('../utils/studentAccess');
+
+const ensureStudentAssignmentAccess = async (req, assignmentId) => {
+  if (req.user?.userType !== '학생') return true;
+  return Boolean(await Course.exists({
+    assignments: assignmentId,
+    students: req.user._id,
+  }));
+};
 
 // GET /api/assignments - 모든 과제 조회 (페이지네이션 지원)
 const getAllAssignments = async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
-    const skip = (page - 1) * limit;
+    const { page, limit, skip } = parsePagination(req.query);
 
     // 목록 조회 시 submissions 상세 정보 제외 (성능 최적화)
     const assignments = await Assignment.find()
@@ -42,6 +55,14 @@ const getAllAssignments = async (req, res) => {
 // submissions.studentId를 mathchang DB의 User에서 조회하여 학생 이름 포함
 const getAssignmentById = async (req, res) => {
   try {
+    const user = req.user;
+    if (user?.userType === '학생' && !(await ensureStudentAssignmentAccess(req, req.params.id))) {
+      return res.status(403).json({
+        success: false,
+        message: '등록된 강좌의 과제만 조회할 수 있습니다',
+      });
+    }
+
     const assignment = await Assignment.findById(req.params.id);
 
     if (!assignment) {
@@ -52,6 +73,15 @@ const getAssignmentById = async (req, res) => {
     }
 
     const assignmentObj = assignment.toObject();
+
+    // 학생은 자신의 제출만 볼 수 있다. 필터링을 이름 join보다 먼저 수행해
+    // 다른 학생의 ID/답안/제출 시간도 응답에 남지 않도록 한다.
+    if (user?.userType === '학생') {
+      assignmentObj.submissions = (assignmentObj.submissions || []).filter((sub) => {
+        const subStudentId = sub.studentId?._id || sub.studentId;
+        return subStudentId && String(subStudentId) === String(user._id);
+      });
+    }
 
     // submissions의 studentId에 대해 mathchang DB에서 User 정보 조회
     if (assignmentObj.submissions && assignmentObj.submissions.length > 0) {
@@ -92,8 +122,7 @@ const getAssignmentById = async (req, res) => {
     // 단, 제출된 과제인 경우 정답 포함 (정답 확인을 위해)
     // req.user가 있으면 (인증된 경우) 역할 확인, 없으면 정답 제외 (안전을 위해)
     // mathchang의 userType: '학생', '학부모', '강사'
-    const user = req.user;
-    const isStudent = !user || (!user.isAdmin && user.userType !== '강사');
+    const isStudent = !user || user.userType === '학생';
 
     // 학생인 경우
     if (isStudent && user) {
@@ -589,6 +618,7 @@ const deleteAssignment = async (req, res) => {
 // POST /api/assignments/:id/submit - 학생 답안 제출 및 채점
 const submitAnswers = async (req, res) => {
   try {
+    if (!requireStudentActor(req, res)) return;
     const { id } = req.params;
     const { studentAnswers, strokeData } = req.body; // strokeData: 스트로크 데이터 배열
     const studentId = req.user._id; // 인증된 사용자 ID
@@ -597,6 +627,13 @@ const submitAnswers = async (req, res) => {
       return res.status(401).json({
         success: false,
         message: '인증이 필요합니다'
+      });
+    }
+
+    if (!(await ensureStudentAssignmentAccess(req, id))) {
+      return res.status(403).json({
+        success: false,
+        message: '등록된 강좌의 과제만 제출할 수 있습니다',
       });
     }
 
@@ -749,6 +786,7 @@ const submitAnswers = async (req, res) => {
 // POST /api/assignments/:id/heartbeat - 체류 시간 업데이트
 const updateTimeSpent = async (req, res) => {
   try {
+    if (!requireStudentActor(req, res)) return;
     const { id } = req.params;
     const { seconds } = req.body;
     const studentId = req.user._id;
@@ -757,6 +795,13 @@ const updateTimeSpent = async (req, res) => {
       return res.status(401).json({
         success: false,
         message: '인증이 필요합니다'
+      });
+    }
+
+    if (!(await ensureStudentAssignmentAccess(req, id))) {
+      return res.status(403).json({
+        success: false,
+        message: '등록된 강좌의 과제만 기록할 수 있습니다',
       });
     }
 
@@ -833,6 +878,7 @@ const updateTimeSpent = async (req, res) => {
 // POST /api/assignments/:id/save-draft - 풀이 임시저장
 const saveDraft = async (req, res) => {
   try {
+    if (!requireStudentActor(req, res)) return;
     const { id } = req.params;
     const { strokeData } = req.body;
     const studentId = req.user._id;
@@ -841,6 +887,13 @@ const saveDraft = async (req, res) => {
       return res.status(401).json({
         success: false,
         message: '인증이 필요합니다'
+      });
+    }
+
+    if (!(await ensureStudentAssignmentAccess(req, id))) {
+      return res.status(403).json({
+        success: false,
+        message: '등록된 강좌의 과제만 저장할 수 있습니다',
       });
     }
 
@@ -945,6 +998,7 @@ const saveDraft = async (req, res) => {
 // GET /api/assignments/:id/draft - 임시저장된 풀이 조회
 const getDraft = async (req, res) => {
   try {
+    if (!requireStudentActor(req, res)) return;
     const { id } = req.params;
     const studentId = req.user._id;
 
@@ -952,6 +1006,13 @@ const getDraft = async (req, res) => {
       return res.status(401).json({
         success: false,
         message: '인증이 필요합니다'
+      });
+    }
+
+    if (!(await ensureStudentAssignmentAccess(req, id))) {
+      return res.status(403).json({
+        success: false,
+        message: '등록된 강좌의 과제만 조회할 수 있습니다',
       });
     }
 
@@ -1003,13 +1064,16 @@ const getStudentStrokeData = async (req, res) => {
     const { id, studentId } = req.params;
     const user = req.user;
 
-    // 권한 확인: 선생님/관리자만 가능
-    if (!user || (!user.isAdmin && user.userType !== '강사')) {
+    // 권한 확인: 강사만 가능
+    if (!user || user.userType !== '강사') {
       return res.status(403).json({
         success: false,
         message: '권한이 없습니다'
       });
     }
+
+    const studentAccess = await resolveStudentAccess(req, studentId);
+    if (!studentAccess.ok) return sendAccessError(res, studentAccess);
 
     // 과제 존재 확인
     const assignment = await Assignment.findById(id).select('_id');
@@ -1020,10 +1084,21 @@ const getStudentStrokeData = async (req, res) => {
       });
     }
 
+    const isEnrolled = await Course.exists({
+      assignments: id,
+      students: studentAccess.id,
+    });
+    if (!isEnrolled) {
+      return res.status(403).json({
+        success: false,
+        message: '해당 과제와 연결된 학생만 조회할 수 있습니다',
+      });
+    }
+
     // StrokeData 컬렉션에서 조회
     const strokeDataDoc = await StrokeData.findOne({
       assignmentId: id,
-      studentId
+      studentId: studentAccess.id
     });
 
     if (!strokeDataDoc || !strokeDataDoc.pages || strokeDataDoc.pages.length === 0) {
@@ -1065,4 +1140,3 @@ module.exports = {
   getDraft,
   getStudentStrokeData
 };
-

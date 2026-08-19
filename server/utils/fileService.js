@@ -1,15 +1,23 @@
 /**
  * 파일 스토리지 서비스 (R2 + Cloudinary 통합)
  *
- * R2 환경변수가 설정되어 있으면 R2 사용, 없으면 Cloudinary로 폴백
+ * R2 환경변수가 설정되어 있으면 R2를 사용한다. R2와 Cloudinary가 모두
+ * 없으면 외부 서비스 호출 없이 명시적으로 실패한다.
  */
 
 const r2 = require('./r2');
 const cloudinary = require('./cloudinary');
+const { parseAndValidateImageDataUrl } = require('./uploadSecurity');
 
 // 사용할 스토리지 결정
 const useR2 = r2.isConfigured;
-const storageType = useR2 ? 'R2' : 'Cloudinary';
+const storageType = useR2 ? 'R2' : (cloudinary.isConfigured ? 'Cloudinary' : 'Unavailable');
+
+const assertStorageConfigured = () => {
+  if (!useR2 && !cloudinary.isConfigured) {
+    throw new Error('업로드 저장소가 설정되지 않았습니다.');
+  }
+};
 
 /**
  * URL이 R2 URL인지 확인
@@ -62,11 +70,17 @@ const extractCloudinaryPublicId = (url) => {
  * @returns {Promise<string>} - 공개 URL
  */
 const uploadBase64Image = async (key, base64Data) => {
+  if (!/^uploads\/base64\/\d{4}-\d{2}-\d{2}\/[a-f0-9-]+\.(?:jpg|png|gif|webp)$/i.test(key)) {
+    throw new Error('서버에서 생성한 이미지 저장 키만 사용할 수 있습니다.');
+  }
+
+  const image = parseAndValidateImageDataUrl(base64Data);
   if (useR2) {
-    return await r2.uploadBase64Image(key, base64Data);
+    return await r2.uploadBase64Image(key, image.dataUrl);
   } else {
+    assertStorageConfigured();
     // Cloudinary 업로드
-    const result = await cloudinary.cloudinary.uploader.upload(base64Data, {
+    const result = await cloudinary.cloudinary.uploader.upload(image.dataUrl, {
       folder: key.split('/').slice(0, -1).join('/'),
       public_id: key.split('/').pop().replace(/\.[^.]+$/, ''),
       resource_type: 'image',
@@ -86,6 +100,7 @@ const uploadFile = async (key, body, contentType) => {
   if (useR2) {
     return await r2.uploadFile(key, body, contentType);
   } else {
+    assertStorageConfigured();
     // Cloudinary 업로드 (Buffer를 base64로 변환)
     const base64Data = `data:${contentType};base64,${body.toString('base64')}`;
     const result = await cloudinary.cloudinary.uploader.upload(base64Data, {
@@ -120,7 +135,7 @@ const deleteFileByUrl = async (url) => {
       console.warn(`알 수 없는 URL 형식: ${url}`);
     }
   } catch (error) {
-    console.error(`파일 삭제 실패 (${url}):`, error.message);
+    console.error('파일 삭제 실패:', error.message);
     throw error;
   }
 };

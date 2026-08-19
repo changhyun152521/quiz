@@ -60,4 +60,10 @@ server/
 └── README.md           # 프로젝트 설명
 ```
 
+## 운영 보안 기본값
+
+- `CORS_ALLOWED_ORIGINS` 또는 `FRONTEND_URL`에 허용할 `http(s)` origin을 쉼표로 지정합니다. 프로덕션에서 목록이 없거나 `*`를 사용하면 서버가 시작되지 않습니다.
+- 일반 JSON 본문은 1MB, urlencoded 본문은 256KB로 제한되며 이미지 base64 업로드 경로만 8MB를 사용합니다.
+- 목록 API의 `page`와 `limit`은 최대 100으로 제한됩니다.
+- 오류 응답에는 내부 stack, MongoDB URL, credential이 포함되지 않습니다.
 

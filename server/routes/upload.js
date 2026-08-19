@@ -1,7 +1,18 @@
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
-const { uploadBase64Image, useR2, r2 } = require('../utils/fileService');
+const { uploadBase64Image, useR2, r2, cloudinary } = require('../utils/fileService');
+const { authenticate } = require('../middleware/auth');
+const {
+  MAX_UPLOAD_BYTES,
+  PRESIGNED_URL_TTL_SECONDS,
+  isAllowedUploadMimeType,
+  parseAndValidateImageDataUrl,
+  createServerGeneratedObjectKey,
+  uploadRateLimiter,
+} = require('../utils/uploadSecurity');
+
+router.use(uploadRateLimiter);
 
 /**
  * GET /api/upload/config
@@ -9,7 +20,7 @@ const { uploadBase64Image, useR2, r2 } = require('../utils/fileService');
  * - useServerUpload: true → R2 presigned URL로 클라이언트 직접 업로드
  * - useServerUpload: false → Cloudinary 위젯으로 직접 업로드
  */
-router.get('/config', (req, res) => {
+router.get('/config', authenticate, (req, res) => {
   try {
     if (useR2) {
       // R2 사용 중 - presigned URL로 클라이언트 직접 업로드
@@ -25,12 +36,12 @@ router.get('/config', (req, res) => {
     } else {
       // Cloudinary 설정
       const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
-      const uploadPreset = process.env.CLOUDINARY_UPLOAD_PRESET || 'unsigned';
+      const uploadPreset = process.env.CLOUDINARY_UPLOAD_PRESET;
 
-      if (!cloudName) {
-        return res.status(500).json({
+      if (!cloudName || !uploadPreset || !cloudinary.isConfigured) {
+        return res.status(503).json({
           success: false,
-          message: 'Cloudinary가 설정되지 않았습니다.'
+          message: '업로드 저장소가 설정되지 않았습니다.'
         });
       }
 
@@ -40,17 +51,15 @@ router.get('/config', (req, res) => {
           storageType: 'cloudinary',
           cloudName,
           uploadPreset,
-          apiKey: process.env.CLOUDINARY_API_KEY,
           useServerUpload: false
         }
       });
     }
   } catch (error) {
     console.error('업로드 설정 조회 오류:', error);
-    res.status(500).json({
+    res.status(503).json({
       success: false,
-      message: '설정 조회 실패',
-      error: error.message
+      message: '업로드 설정을 사용할 수 없습니다.'
     });
   }
 });
@@ -59,7 +68,7 @@ router.get('/config', (req, res) => {
  * POST /api/upload/signature
  * Cloudinary 서명 생성 (Cloudinary 사용 시에만)
  */
-router.post('/signature', (req, res) => {
+router.post('/signature', authenticate, (req, res) => {
   try {
     if (useR2) {
       return res.status(400).json({
@@ -71,10 +80,10 @@ router.post('/signature', (req, res) => {
     const paramsToSign = req.body;
     const apiSecret = process.env.CLOUDINARY_API_SECRET;
 
-    if (!apiSecret) {
-      return res.status(500).json({
+    if (!apiSecret || !cloudinary.isConfigured) {
+      return res.status(503).json({
         success: false,
-        message: 'Cloudinary API Secret이 설정되지 않았습니다.'
+        message: '업로드 서명 서비스를 사용할 수 없습니다.'
       });
     }
 
@@ -108,10 +117,9 @@ router.post('/signature', (req, res) => {
     res.json({ signature });
   } catch (error) {
     console.error('서명 생성 오류:', error);
-    res.status(500).json({
+    res.status(503).json({
       success: false,
-      message: '서명 생성 실패',
-      error: error.message
+      message: '업로드 서명을 생성할 수 없습니다.'
     });
   }
 });
@@ -121,8 +129,25 @@ router.post('/signature', (req, res) => {
  * R2 업로드용 presigned URL 생성
  * 클라이언트가 직접 R2에 업로드할 수 있도록 함
  */
-router.get('/presigned-url', async (req, res) => {
+router.get('/presigned-url', authenticate, async (req, res) => {
   try {
+    const { contentType, size } = req.query;
+
+    if (!contentType || !isAllowedUploadMimeType(contentType)) {
+      return res.status(400).json({
+        success: false,
+        message: '지원하지 않는 업로드 MIME 타입입니다.'
+      });
+    }
+
+    const contentLength = Number(size);
+    if (!Number.isSafeInteger(contentLength) || contentLength <= 0 || contentLength > MAX_UPLOAD_BYTES) {
+      return res.status(413).json({
+        success: false,
+        message: `파일 크기는 1바이트 이상 ${MAX_UPLOAD_BYTES / (1024 * 1024)}MB 이하여야 합니다.`
+      });
+    }
+
     if (!useR2) {
       return res.status(400).json({
         success: false,
@@ -130,28 +155,25 @@ router.get('/presigned-url', async (req, res) => {
       });
     }
 
-    const { filename, contentType, folder = 'uploads' } = req.query;
+    const normalizedContentType = contentType.trim().toLowerCase();
+    // filename/folder는 클라이언트 입력으로 사용하지 않는다.
+    const key = createServerGeneratedObjectKey('presigned', normalizedContentType);
 
-    if (!filename || !contentType) {
-      return res.status(400).json({
-        success: false,
-        message: 'filename과 contentType이 필요합니다.'
-      });
-    }
-
-    // 안전한 파일명 생성
-    const timestamp = Date.now();
-    const safeFilename = filename.replace(/[^a-zA-Z0-9가-힣._-]/g, '_');
-    const key = `${folder}/${timestamp}_${safeFilename}`;
-
-    const { uploadUrl, publicUrl } = await r2.getPresignedUploadUrl(key, contentType, 3600);
+    const { uploadUrl, publicUrl } = await r2.getPresignedUploadUrl(
+      key,
+      normalizedContentType,
+      PRESIGNED_URL_TTL_SECONDS,
+      contentLength
+    );
 
     res.json({
       success: true,
       data: {
         uploadUrl,
         publicUrl,
-        key
+        key,
+        contentType: normalizedContentType,
+        expiresIn: PRESIGNED_URL_TTL_SECONDS,
       }
     });
   } catch (error) {
@@ -169,9 +191,9 @@ router.get('/presigned-url', async (req, res) => {
  * Base64 이미지 업로드 (서버에서 직접 R2/Cloudinary로 업로드)
  * 주로 Canvas 이미지 등 클라이언트에서 생성된 이미지용
  */
-router.post('/base64', async (req, res) => {
+router.post('/base64', authenticate, async (req, res) => {
   try {
-    const { base64Data, folder = 'uploads', filename } = req.body;
+    const { base64Data } = req.body;
 
     if (!base64Data) {
       return res.status(400).json({
@@ -180,10 +202,20 @@ router.post('/base64', async (req, res) => {
       });
     }
 
-    const timestamp = Date.now();
-    const key = `${folder}/${filename || `image_${timestamp}.png`}`;
+    let image;
+    try {
+      image = parseAndValidateImageDataUrl(base64Data);
+    } catch (validationError) {
+      const status = validationError.message.includes('크기') ? 413 : 400;
+      return res.status(status).json({
+        success: false,
+        message: validationError.message,
+      });
+    }
 
-    const url = await uploadBase64Image(key, base64Data);
+    const key = createServerGeneratedObjectKey('base64', image.mimeType);
+
+    const url = await uploadBase64Image(key, image.dataUrl);
 
     res.json({
       success: true,
@@ -191,10 +223,9 @@ router.post('/base64', async (req, res) => {
     });
   } catch (error) {
     console.error('Base64 업로드 오류:', error);
-    res.status(500).json({
+    res.status(503).json({
       success: false,
-      message: '업로드 실패',
-      error: error.message
+      message: '업로드 저장소를 사용할 수 없습니다.'
     });
   }
 });

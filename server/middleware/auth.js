@@ -1,16 +1,14 @@
-// mathchang-quiz는 mathchang에서 발급한 JWT 토큰을 검증합니다.
-// JWT_SECRET은 mathchang과 동일하게 설정해야 합니다.
-// DB는 분리되어 있으므로 토큰 payload만 사용합니다.
+// mathchang-quiz는 mathchang에서 발급한 JWT를 검증하고 원장 DB에서
+// 현재 사용자/토큰 버전을 확인합니다. stale payload를 권한 정보로 신뢰하지 않습니다.
 
 const jwt = require('jsonwebtoken');
+const { getJwtSecret } = require('../config/security');
+const getUser = require('../models/User');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-key-change-in-production';
+const JWT_SECRET = getJwtSecret();
 
-// JWT 토큰 검증 미들웨어
-// mathchang에서 발급한 토큰을 검증하고, payload를 req.user에 저장
 const authenticate = async (req, res, next) => {
   try {
-    // 헤더에서 토큰 추출
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -20,22 +18,55 @@ const authenticate = async (req, res, next) => {
       });
     }
 
-    const token = authHeader.substring(7); // 'Bearer ' 제거
-
-    // 토큰 검증 (mathchang과 동일한 JWT_SECRET 사용)
+    const token = authHeader.substring(7);
     const decoded = jwt.verify(token, JWT_SECRET);
 
-    // mathchang의 JWT payload 구조: { userId, id, userType, isAdmin }
-    // DB 조회 없이 토큰 payload를 그대로 사용
+    // 비밀번호 재설정으로 tokenVersion이 증가하면 이전 JWT는 즉시 폐기된다.
+    const currentUser = await getUser()
+      .findById(decoded.id)
+      .select('tokenVersion passwordChangedAt userId userType name phone parentContact studentContact')
+      .lean()
+      .exec();
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: '인증 토큰이 만료되었습니다'
+      });
+    }
+
+    const tokenVersion = Number.isInteger(decoded.tokenVersion)
+      ? decoded.tokenVersion
+      : Number(decoded.tokenVersion || 0);
+    const currentTokenVersion = Number.isInteger(currentUser.tokenVersion)
+      ? currentUser.tokenVersion
+      : Number(currentUser.tokenVersion || 0);
+    const tokenPasswordChangedAt = Number(decoded.passwordChangedAt || 0);
+    const currentPasswordChangedAt = currentUser.passwordChangedAt
+      ? new Date(currentUser.passwordChangedAt).getTime()
+      : 0;
+    if (
+      !Number.isInteger(tokenVersion)
+      || tokenVersion !== currentTokenVersion
+      || (currentPasswordChangedAt > 0 && tokenPasswordChangedAt < currentPasswordChangedAt)
+    ) {
+      return res.status(401).json({
+        success: false,
+        message: '인증 토큰이 만료되었습니다'
+      });
+    }
+
     req.user = {
       _id: decoded.id,
-      userId: decoded.userId,
-      userType: decoded.userType,
-      isAdmin: decoded.isAdmin,
-      name: decoded.name || decoded.userId, // name이 있으면 사용, 없으면 userId
+      userId: currentUser.userId,
+      userType: currentUser.userType,
+      name: currentUser.name || currentUser.userId,
+      phone: currentUser.phone,
+      parentContact: currentUser.parentContact,
+      studentContact: currentUser.studentContact,
+      tokenVersion: currentTokenVersion,
     };
 
-    next();
+    return next();
   } catch (error) {
     if (error.name === 'JsonWebTokenError') {
       return res.status(401).json({
@@ -49,15 +80,13 @@ const authenticate = async (req, res, next) => {
         message: '토큰이 만료되었습니다'
       });
     }
-    res.status(500).json({
+    return res.status(401).json({
       success: false,
-      message: '인증 처리 중 오류가 발생했습니다',
-      error: error.message
+      message: '인증 토큰이 만료되었습니다'
     });
   }
 };
 
-// 역할 기반 권한 확인 미들웨어 (mathchang의 userType 사용)
 const authorize = (allowedTypes) => {
   return (req, res, next) => {
     if (!req.user) {
@@ -67,13 +96,6 @@ const authorize = (allowedTypes) => {
       });
     }
 
-    // mathchang의 userType 기반 권한 확인 (학생, 학부모, 강사)
-    // 관리자(강사)는 항상 허용
-    if (req.user.isAdmin) {
-      return next();
-    }
-
-    // allowedTypes에 사용자 유형이 포함되어 있는지 확인
     if (Array.isArray(allowedTypes) && allowedTypes.length > 0) {
       if (!allowedTypes.includes(req.user.userType)) {
         return res.status(403).json({
@@ -83,7 +105,7 @@ const authorize = (allowedTypes) => {
       }
     }
 
-    next();
+    return next();
   };
 };
 

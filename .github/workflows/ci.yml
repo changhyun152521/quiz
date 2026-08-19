@@ -1,0 +1,58 @@
+name: quiz CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '20.x'
+  # High is the blocking threshold. Low/moderate advisories remain visible in
+  # the audit output while compatibility work is tracked separately.
+  AUDIT_LEVEL: high
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            server/package-lock.json
+            client/package-lock.json
+
+      - name: Install server dependencies
+        working-directory: server
+        run: npm ci
+
+      - name: Install client dependencies
+        working-directory: client
+        run: npm ci
+
+      - name: Server syntax and configuration smoke checks
+        working-directory: server
+        env:
+          JWT_SECRET: ci-local-jwt-secret-please-use-a-real-secret-in-production
+        run: |
+          npm run check:syntax
+          npm run check:smoke
+
+      - name: Build client
+        working-directory: client
+        run: npm run build
+
+      - name: Audit production dependencies
+        run: |
+          npm audit --prefix server --omit=dev --audit-level="$AUDIT_LEVEL"
+          npm audit --prefix client --omit=dev --audit-level="$AUDIT_LEVEL"
+

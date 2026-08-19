@@ -1,50 +1,45 @@
 // 환경변수 로드 (가장 먼저 실행)
-const path = require('path');
-require('dotenv').config({ path: path.resolve(__dirname, '.env') });
+require('./config/loadEnv');
+const { validateJwtSecret } = require('./config/security');
+
+// mathchang에서 발급한 토큰을 검증하므로 시작 시 동일한 강한 비밀키가 필요합니다.
+validateJwtSecret();
 
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
 const connectDB = require('./config/database');
+const {
+  getCorsOptions,
+  requestLogger,
+  responseSanitizer,
+  errorHandler,
+} = require('./middleware/operationalSecurity');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// 미들웨어
-// CORS 설정
-const corsOptions = {
-  origin: process.env.FRONTEND_URL || true, // 프로덕션에서는 FRONTEND_URL 사용, 없으면 모든 origin 허용
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Access-Control-Request-Headers', 'Access-Control-Request-Method'],
-  preflightContinue: false,
-  optionsSuccessStatus: 204
-};
+// 미들웨어: 명시적 Origin 목록과 기본 보안 헤더를 사용한다.
+const corsOptions = getCorsOptions();
+app.use(helmet());
 app.use(cors(corsOptions));
 
 // OPTIONS 요청 처리 (CORS preflight) - 모든 경로에 대해
 app.options('*', cors(corsOptions));
 
-// JSON body parser - 큰 이미지 업로드를 위해 크기 제한 증가 (50MB)
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-
-// 요청/응답 로깅 미들웨어
+// 일반 API 본문은 작게 제한하고, 이미지 base64가 필요한 업로드 경로만
+// 별도 상한을 사용한다.
+const defaultJsonParser = express.json({ limit: '1mb' });
+const uploadJsonParser = express.json({ limit: '8mb' });
+app.use(responseSanitizer);
+app.use(requestLogger);
 app.use((req, res, next) => {
-  const start = Date.now();
-
-  res.on('finish', () => {
-    const duration = Date.now() - start;
-    const log = `${req.method} ${req.originalUrl} ${res.statusCode} ${duration}ms`;
-
-    if (res.statusCode >= 400) {
-      console.warn(`[API] ${log}`);
-    } else {
-      console.log(`[API] ${log}`);
-    }
-  });
-
-  next();
+  if (req.path === '/api/upload' || req.path.startsWith('/api/upload/')) {
+    return uploadJsonParser(req, res, next);
+  }
+  return defaultJsonParser(req, res, next);
 });
+app.use(express.urlencoded({ extended: true, limit: '256kb' }));
 
 // MongoDB 연결 및 서버 시작
 const startServer = async () => {
@@ -170,4 +165,8 @@ app.use('/api/students', studentRoutes);
 const messageRoutes = require('./routes/messages');
 app.use('/api/messages', messageRoutes);
 
+app.use((req, res) => {
+  res.status(404).json({ success: false, error: '라우트를 찾을 수 없습니다' });
+});
 
+app.use(errorHandler);

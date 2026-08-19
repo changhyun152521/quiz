@@ -3,6 +3,10 @@
 
 const Assignment = require('../models/Assignment');
 const Course = require('../models/Course');
+const {
+  resolveStudentAccess,
+  sendAccessError,
+} = require('../utils/studentAccess');
 
 // 과목별 대단원 및 소단원 순서 정의
 const unitOrder = {
@@ -235,15 +239,15 @@ function sortSubUnitStats(stats) {
 // GET /api/students/:studentId/study-report - 학생 학습현황 보고서
 const getStudyReport = async (req, res) => {
   try {
-    const { studentId } = req.params;
+    const { studentId: requestedStudentId } = req.params;
     const { year, month, startDate: startDateParam, endDate: endDateParam, courseId } = req.query;
 
-    if (!studentId) {
-      return res.status(400).json({
-        success: false,
-        message: '학생 ID는 필수입니다'
-      });
+    const studentAccess = await resolveStudentAccess(req, requestedStudentId);
+    if (!studentAccess.ok) {
+      return sendAccessError(res, studentAccess);
     }
+    // From this point on, every query uses the server-resolved identity.
+    const studentId = studentAccess.id;
 
     let startDate, endDate;
 
@@ -296,6 +300,12 @@ const getStudyReport = async (req, res) => {
         return res.status(404).json({
           success: false,
           message: '강좌를 찾을 수 없습니다'
+        });
+      }
+      if (!course.students.some((courseStudentId) => String(courseStudentId) === studentId)) {
+        return res.status(403).json({
+          success: false,
+          message: '학생이 등록된 강좌만 조회할 수 있습니다'
         });
       }
     } else {
@@ -500,4 +510,3 @@ const getStudyReport = async (req, res) => {
 module.exports = {
   getStudyReport
 };
-

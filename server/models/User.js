@@ -17,6 +17,13 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    tokenVersion: {
+      type: Number,
+      default: 0,
+    },
+    passwordChangedAt: {
+      type: Date,
+    },
     name: {
       type: String,
       required: true,
@@ -49,10 +56,6 @@ const userSchema = new mongoose.Schema(
       type: String,
       enum: ['학생', '학부모', '강사'],
       default: '학생',
-    },
-    isAdmin: {
-      type: Boolean,
-      default: false,
     },
     profileImage: {
       type: String,

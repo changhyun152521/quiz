@@ -200,7 +200,7 @@ function MainPage({ onLoginSuccess, onBackToDashboard, onShowCourseSelection, on
                       const user = data.data?.user || JSON.parse(userData)
                       
                       // 학생인 경우 강좌 선택 모달 표시 (mathchang: userType이 '학생')
-                      const isStudent = user.userType === '학생' || user.role === 'student' || (!user.userType && !user.role);
+                      const isStudent = user.userType === '학생';
                       if (onShowCourseSelection && isStudent) {
                         // 먼저 로그인 상태 업데이트
                         onLoginSuccess(user, false)
@@ -235,17 +235,14 @@ function MainPage({ onLoginSuccess, onBackToDashboard, onShowCourseSelection, on
                 if (!user) {
                   return '로그인하기'
                 }
-                // mathchang: userType 사용 (학생, 학부모, 강사)
-                const isStudent = user.userType === '학생' || user.role === 'student' || (!user.userType && !user.role);
-                const isTeacher = user.userType === '강사' || user.role === 'teacher';
-                const isAdmin = user.isAdmin || user.role === 'admin' || user.userId === 'admin';
+                // mathchang의 원장 역할 필드만 사용합니다 (학생, 학부모, 강사)
+                const isStudent = user.userType === '학생';
+                const isTeacher = user.userType === '강사';
 
                 if (isStudent) {
                   return '학습 시작하기'
                 } else if (isTeacher) {
                   return '강사 페이지'
-                } else if (isAdmin) {
-                  return '관리자 페이지'
                 } else {
                   return '로그인하기'
                 }
@@ -295,4 +292,3 @@ function MainPage({ onLoginSuccess, onBackToDashboard, onShowCourseSelection, on
 }
 
 export default MainPage
-

@@ -17,9 +17,9 @@ async function sendKakaoMessage({ phone, message, image, reportTitle }) {
   
   // 현재는 로그만 남김
   console.log('=== 카카오톡 메시지 발송 ===');
-  console.log(`수신자: ${phone}`);
+  console.log(`수신자: ${phone ? '설정됨' : '없음'}`);
   console.log(`보고서 제목: ${reportTitle}`);
-  console.log(`메시지: ${message}`);
+  console.log(`메시지: ${message ? '생성됨' : '없음'}`);
   console.log(`이미지: ${image ? '있음' : '없음'}`);
   console.log('===========================');
 
@@ -52,4 +52,3 @@ async function sendKakaoMessage({ phone, message, image, reportTitle }) {
 module.exports = {
   sendKakaoMessage
 };
-

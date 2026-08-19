@@ -186,12 +186,11 @@ export const useFileUpload = (onUploadSuccess) => {
   };
 
   // Presigned URL로 R2에 직접 업로드
-  const uploadToR2 = async (file, folder = 'assignments') => {
+  const uploadToR2 = async (file) => {
     // 1. 서버에서 presigned URL 받기
     const params = new URLSearchParams({
-      filename: file.name,
       contentType: file.type,
-      folder
+      size: String(file.size),
     });
 
     const presignedResponse = await get(`/api/upload/presigned-url?${params}`);

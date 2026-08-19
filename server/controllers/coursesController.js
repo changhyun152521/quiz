@@ -3,6 +3,11 @@
 
 const Course = require('../models/Course');
 const Assignment = require('../models/Assignment');
+const {
+  resolveStudentAccess,
+  sendAccessError,
+} = require('../utils/studentAccess');
+const { parsePagination } = require('../utils/pagination');
 
 const MATHCHANG_API_URL = process.env.MATHCHANG_API_URL || 'https://api.mathchang.com';
 
@@ -44,7 +49,7 @@ const fetchStudentsByIds = async (studentIds, authHeader) => {
 };
 
 // 강좌에 학생 정보를 join하는 헬퍼 함수
-const populateStudents = async (courses, authHeader) => {
+const populateStudents = async (courses, authHeader, visibleStudentId = null) => {
   // 모든 강좌의 학생 ID를 수집 (중복 제거)
   const allStudentIds = [...new Set(
     courses.flatMap(course => (course.students || []).map(id => String(id)))
@@ -59,7 +64,10 @@ const populateStudents = async (courses, authHeader) => {
   // 각 강좌의 students를 학생 정보로 교체
   return courses.map(course => {
     const courseObj = course.toObject ? course.toObject() : { ...course };
-    courseObj.students = (course.students || []).map(id =>
+    const visibleIds = visibleStudentId
+      ? (course.students || []).filter((id) => String(id) === String(visibleStudentId))
+      : (course.students || []);
+    courseObj.students = visibleIds.map(id =>
       studentMap.get(String(id)) || { _id: String(id), name: '알 수 없음' }
     );
     return courseObj;
@@ -70,21 +78,30 @@ const populateStudents = async (courses, authHeader) => {
 // studentId 쿼리 파라미터가 있으면 해당 학생이 등록된 강좌만 반환
 const getAllCourses = async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
-    const skip = (page - 1) * limit;
-    const { studentId } = req.query;
+    const { page, limit, skip } = parsePagination(req.query);
+    const { studentId: requestedStudentId } = req.query;
 
     // 필터 조건 설정
     const filter = {};
-    if (studentId) {
-      filter.students = studentId;  // 해당 학생이 등록된 강좌만 필터링
+    let visibleStudentId = null;
+    if (requestedStudentId || req.user.userType === '학생') {
+      const studentAccess = await resolveStudentAccess(
+        req,
+        requestedStudentId || req.user._id,
+      );
+      if (!studentAccess.ok) return sendAccessError(res, studentAccess);
+      filter.students = studentAccess.id;
+      visibleStudentId = studentAccess.id;
     }
+
+    const assignmentSelect = req.user.userType === '강사'
+      ? 'assignmentName subject mainUnit subUnit questionCount assignmentType startDate dueDate submissions questionFileUrl questionFileType solutionFileUrl solutionFileType fileUrl fileType'
+      : 'assignmentName subject mainUnit subUnit questionCount assignmentType startDate dueDate questionFileUrl questionFileType solutionFileUrl solutionFileType fileUrl fileType';
 
     const courses = await Course.find(filter)
       .populate({
         path: 'assignments',
-        select: 'assignmentName subject mainUnit subUnit questionCount assignmentType startDate dueDate submissions questionFileUrl questionFileType solutionFileUrl solutionFileType fileUrl fileType'
+        select: assignmentSelect
       })
       .sort({ createdAt: -1 })
       .skip(skip)
@@ -93,7 +110,11 @@ const getAllCourses = async (req, res) => {
     const total = await Course.countDocuments(filter);
 
     // 학생 정보 join
-    const coursesWithStudents = await populateStudents(courses, req.headers.authorization);
+    const coursesWithStudents = await populateStudents(
+      courses,
+      req.headers.authorization,
+      visibleStudentId,
+    );
 
     res.json({
       success: true,
@@ -117,6 +138,11 @@ const getAllCourses = async (req, res) => {
 // GET /api/courses/:id - 특정 강좌 조회
 const getCourseById = async (req, res) => {
   try {
+    if (req.user.userType === '학생') {
+      const studentAccess = await resolveStudentAccess(req, req.user._id);
+      if (!studentAccess.ok) return sendAccessError(res, studentAccess);
+    }
+
     const course = await Course.findById(req.params.id)
       .populate('assignments', 'assignmentName subject mainUnit subUnit questionCount assignmentType startDate dueDate questionFileUrl questionFileType solutionFileUrl solutionFileType fileUrl fileType');
 
@@ -127,8 +153,21 @@ const getCourseById = async (req, res) => {
       });
     }
 
-    // 학생 정보 join
-    const [courseWithStudents] = await populateStudents([course], req.headers.authorization);
+    if (req.user.userType === '학생' && !course.students.some(
+      (studentId) => String(studentId) === String(req.user._id),
+    )) {
+      return res.status(403).json({
+        success: false,
+        message: '등록된 강좌만 조회할 수 있습니다',
+      });
+    }
+
+    // 학생 정보 join (학생에게는 본인만 표시)
+    const [courseWithStudents] = await populateStudents(
+      [course],
+      req.headers.authorization,
+      req.user.userType === '학생' ? req.user._id : null,
+    );
 
     res.json({
       success: true,
@@ -461,10 +500,10 @@ const getTeachers = async (req, res) => {
       return res.status(response.status).json(data);
     }
 
-    // 강사만 필터링 (userType === '강사' 또는 isAdmin === true)
+    // 강사만 필터링
     const users = data.data || data;
     const teachers = users.filter(user =>
-      user.userType === '강사' || user.isAdmin === true
+      user.userType === '강사'
     );
 
     res.json({
@@ -519,25 +558,28 @@ const getStudents = async (req, res) => {
 // GET /api/courses/student/:studentId - 특정 학생이 등록된 강좌 목록 조회
 const getCoursesByStudent = async (req, res) => {
   try {
-    const { studentId } = req.params;
+    const studentAccess = await resolveStudentAccess(req, req.params.studentId);
+    if (!studentAccess.ok) return sendAccessError(res, studentAccess);
+    const studentId = studentAccess.id;
 
-    if (!studentId) {
-      return res.status(400).json({
-        success: false,
-        message: '학생 ID는 필수입니다'
-      });
-    }
+    const assignmentSelect = req.user.userType === '강사'
+      ? 'assignmentName subject mainUnit subUnit questionCount assignmentType startDate dueDate createdAt fileUrl fileType questionFileUrl questionFileType solutionFileUrl solutionFileType submissions'
+      : 'assignmentName subject mainUnit subUnit questionCount assignmentType startDate dueDate createdAt fileUrl fileType questionFileUrl questionFileType solutionFileUrl solutionFileType';
 
     // 학생이 등록된 강좌들 조회
     const courses = await Course.find({ students: studentId })
       .populate({
         path: 'assignments',
-        select: 'assignmentName subject mainUnit subUnit questionCount assignmentType startDate dueDate createdAt fileUrl fileType questionFileUrl questionFileType solutionFileUrl solutionFileType submissions'
+        select: assignmentSelect
       })
       .sort({ createdAt: -1 });
 
     // 학생 정보 join
-    const coursesWithStudents = await populateStudents(courses, req.headers.authorization);
+    const coursesWithStudents = await populateStudents(
+      courses,
+      req.headers.authorization,
+      req.user.userType === '학생' ? studentId : null,
+    );
 
     res.json({
       success: true,
@@ -680,4 +722,3 @@ module.exports = {
   addAssignmentToCourse,
   removeAssignmentFromCourse
 };
-

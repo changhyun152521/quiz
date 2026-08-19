@@ -137,7 +137,7 @@ function Login({ showModal, onClose, onLoginSuccess }) {
       if (onLoginSuccess) {
         const user = data.data.user;
         // 학생인 경우 (mathchang: userType이 '학생')
-        const isStudent = user.userType === '학생' || (!user.userType && !user.isAdmin);
+        const isStudent = user.userType === '학생';
         onLoginSuccess(user, isStudent);
       }
     } catch (error) {

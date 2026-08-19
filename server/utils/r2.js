@@ -5,6 +5,12 @@
 
 const { S3Client, PutObjectCommand, DeleteObjectCommand, HeadObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+const {
+  MAX_UPLOAD_BYTES,
+  PRESIGNED_URL_TTL_SECONDS,
+  isAllowedUploadMimeType,
+  parseAndValidateImageDataUrl,
+} = require('./uploadSecurity');
 
 // R2 환경변수 확인
 const isConfigured = !!(
@@ -61,13 +67,7 @@ const uploadFile = async (key, body, contentType) => {
  * @returns {Promise<string>} - 공개 URL
  */
 const uploadBase64Image = async (key, base64Data) => {
-  const matches = base64Data.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-  if (!matches || matches.length !== 3) {
-    throw new Error('유효하지 않은 Base64 이미지 형식');
-  }
-
-  const contentType = matches[1];
-  const buffer = Buffer.from(matches[2], 'base64');
+  const { mimeType: contentType, buffer } = parseAndValidateImageDataUrl(base64Data);
 
   return await uploadFile(key, buffer, contentType);
 };
@@ -94,21 +94,36 @@ const deleteFile = async (key) => {
  * Presigned URL 생성
  * @param {string} key - 업로드할 파일 경로
  * @param {string} contentType - MIME 타입
- * @param {number} expiresIn - URL 만료 시간 (초)
+ * @param {number} expiresIn - URL 만료 시간 (초), 서버 상한 적용
+ * @param {number} contentLength - 업로드할 파일 크기 (바이트)
  * @returns {Promise<{uploadUrl: string, publicUrl: string}>}
  */
-const getPresignedUploadUrl = async (key, contentType, expiresIn = 3600) => {
+const getPresignedUploadUrl = async (key, contentType, expiresIn = PRESIGNED_URL_TTL_SECONDS, contentLength) => {
   if (!isConfigured) {
     throw new Error('R2가 설정되지 않았습니다.');
+  }
+  if (!/^uploads\/presigned\/\d{4}-\d{2}-\d{2}\/[a-f0-9-]+\.(?:jpg|png|gif|webp|pdf)$/i.test(key)) {
+    throw new Error('서버에서 생성한 presigned 저장 키만 사용할 수 있습니다.');
+  }
+  if (!isAllowedUploadMimeType(contentType)) {
+    throw new Error('지원하지 않는 업로드 MIME 타입입니다.');
+  }
+  if (!Number.isSafeInteger(contentLength) || contentLength <= 0 || contentLength > MAX_UPLOAD_BYTES) {
+    throw new Error('업로드 파일 크기가 제한을 초과했습니다.');
   }
 
   const command = new PutObjectCommand({
     Bucket: BUCKET_NAME,
     Key: key,
     ContentType: contentType,
+    ContentLength: contentLength,
   });
 
-  const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn });
+  const boundedExpiresIn = Math.min(
+    Math.max(Number(expiresIn) || PRESIGNED_URL_TTL_SECONDS, 1),
+    PRESIGNED_URL_TTL_SECONDS
+  );
+  const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn: boundedExpiresIn });
   const publicUrl = `${PUBLIC_URL}/${key}`;
 
   return { uploadUrl, publicUrl };

@@ -205,7 +205,7 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
         }
 
         // Cloudinary 모드
-        if (!cloudName || cloudName === 'dummy') {
+        if (!cloudName || !uploadPreset) {
           throw new Error('Cloudinary cloud name이 설정되지 않았습니다.');
         }
 
@@ -484,16 +484,15 @@ function AssignmentModal({ showModal, onClose, assignment, onSave, mode }) {
           continue;
         }
 
-        if (file.size > 50 * 1024 * 1024) {
-          alert(`파일 크기가 너무 큽니다 (최대 50MB): ${file.name}`);
+        if (file.size > 10 * 1024 * 1024) {
+          alert(`파일 크기가 너무 큽니다 (최대 10MB): ${file.name}`);
           continue;
         }
 
         // 1. 서버에서 presigned URL 받기
         const params = new URLSearchParams({
-          filename: file.name,
           contentType: file.type,
-          folder: 'assignments'
+          size: String(file.size),
         });
 
         const presignedResponse = await get(`/api/upload/presigned-url?${params}`);
@@ -2583,4 +2582,3 @@ function SingleAssignmentForm({
 }
 
 export default AssignmentModal;
-

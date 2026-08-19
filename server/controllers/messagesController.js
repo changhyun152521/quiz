@@ -2,6 +2,11 @@
 // 사용자 정보는 프론트엔드에서 전달받습니다.
 
 const Course = require('../models/Course');
+const getUser = require('../models/User');
+const {
+  resolveStudentAccess,
+  sendAccessError,
+} = require('../utils/studentAccess');
 const { sendKakaoMessage } = require('../utils/kakaoMessage');
 
 // POST /api/messages/send-report - 학습 보고서 메시지 발송
@@ -10,12 +15,15 @@ const sendReportMessage = async (req, res) => {
   try {
     const { studentId, studentName, studentUserId, courseId, startDate, endDate, reportTitle, comment, reportImage, parentPhone } = req.body;
 
-    if (!studentId || !studentName || !courseId || !startDate || !endDate || !reportTitle) {
+    if (!studentId || !courseId || !startDate || !endDate || !reportTitle) {
       return res.status(400).json({
         success: false,
         message: '필수 정보가 누락되었습니다 (studentId, studentName, courseId, startDate, endDate, reportTitle)'
       });
     }
+
+    const studentAccess = await resolveStudentAccess(req, studentId);
+    if (!studentAccess.ok) return sendAccessError(res, studentAccess);
 
     // 강좌 정보 가져오기
     const course = await Course.findById(courseId);
@@ -26,6 +34,20 @@ const sendReportMessage = async (req, res) => {
       });
     }
 
+    if (!course.students.some((courseStudentId) => String(courseStudentId) === studentAccess.id)) {
+      return res.status(403).json({
+        success: false,
+        message: '해당 강좌에 등록된 학생만 보고서를 발송할 수 있습니다',
+      });
+    }
+
+    const targetStudent = await getUser().findById(studentAccess.id)
+      .select('name userId parentContact')
+      .lean();
+    if (!targetStudent || targetStudent.userType !== '학생') {
+      return res.status(403).json({ success: false, message: '학생 정보를 확인할 수 없습니다' });
+    }
+
     // 보고서 메시지 생성
     const formatDate = (dateStr) => {
       const date = new Date(dateStr);
@@ -33,7 +55,7 @@ const sendReportMessage = async (req, res) => {
     };
 
     let message = `[${reportTitle}]\n\n`;
-    message += `학생: ${studentName} (${studentUserId || studentId})\n`;
+    message += `학생: ${targetStudent.name} (${targetStudent.userId})\n`;
     message += `강좌: ${course.courseName}\n`;
     message += `학습 기간: ${formatDate(startDate)} ~ ${formatDate(endDate)}\n\n`;
 
@@ -42,18 +64,12 @@ const sendReportMessage = async (req, res) => {
     }
 
     // 카카오톡 메시지 발송
-    const targetPhone = parentPhone;
+    const targetPhone = targetStudent.parentContact;
 
     console.log('=== 학습 보고서 카카오톡 메시지 발송 ===');
-    console.log(`학생: ${studentName} (${studentUserId || studentId})`);
-    console.log(`강좌: ${course.courseName}`);
-    console.log(`기간: ${formatDate(startDate)} ~ ${formatDate(endDate)}`);
-    console.log(`보고서 제목: ${reportTitle}`);
-    console.log(`코멘트: ${comment || '(없음)'}`);
-    console.log(`부모님 연락처: ${targetPhone}`);
+    console.log('학습 보고서 카카오톡 발송을 요청했습니다');
+    console.log(`부모님 연락처: ${targetPhone ? '설정됨' : '없음'}`);
     console.log(`보고서 이미지: ${reportImage ? '있음 (Base64)' : '없음'}`);
-    console.log('메시지 내용:');
-    console.log(message);
     console.log('==========================================');
 
     // 카카오톡 메시지 발송
@@ -76,8 +92,8 @@ const sendReportMessage = async (req, res) => {
       message: '메시지가 발송되었습니다',
       data: {
         studentId,
-        studentName,
-        parentPhone
+        studentName: targetStudent.name,
+        parentPhone: targetPhone
       }
     });
   } catch (error) {
@@ -122,15 +138,35 @@ const sendBulkReportMessages = async (req, res) => {
 
     // 각 학생별로 메시지 발송
     // studentReports 배열에는 { studentId, studentName, studentUserId, parentPhone, ... } 형태의 객체가 포함됨
-    for (const { studentId, studentName, studentUserId, parentPhone } of studentReports) {
+    for (const { studentId } of studentReports) {
       try {
-        if (!studentId || !studentName) {
+        if (!studentId) {
           errors.push({
             studentId,
             error: '학생 정보가 누락되었습니다'
           });
           continue;
         }
+
+        const studentAccess = await resolveStudentAccess(req, studentId);
+        if (!studentAccess.ok) {
+          errors.push({ studentId, error: studentAccess.message });
+          continue;
+        }
+        if (!course.students.some((courseStudentId) => String(courseStudentId) === studentAccess.id)) {
+          errors.push({ studentId, error: '해당 강좌에 등록된 학생이 아닙니다' });
+          continue;
+        }
+        const targetStudent = await getUser().findById(studentAccess.id)
+          .select('name userId parentContact userType')
+          .lean();
+        if (!targetStudent || targetStudent.userType !== '학생') {
+          errors.push({ studentId, error: '학생 정보를 확인할 수 없습니다' });
+          continue;
+        }
+        const studentName = targetStudent.name;
+        const studentUserId = targetStudent.userId;
+        const parentPhone = targetStudent.parentContact;
 
         // 보고서 메시지 생성
         let message = `[${reportTitle}]\n\n`;
@@ -157,12 +193,7 @@ const sendBulkReportMessages = async (req, res) => {
           }
         }
 
-        console.log(`[일괄 발송] ${studentName} (${studentUserId || studentId})에게 카카오톡 메시지 발송`);
-        console.log(`부모님 연락처: ${parentPhone || '(없음)'}`);
-        console.log(`보고서 제목: ${reportTitle}`);
-        console.log(`코멘트: ${comment || '(없음)'}`);
-        console.log(message);
-        console.log('---');
+        console.log('[일괄 발송] 학습 보고서 카카오톡 발송을 요청했습니다');
 
         results.push({
           studentId,
@@ -276,4 +307,3 @@ module.exports = {
   sendReportMessage,
   sendBulkReportMessages
 };
-
